@@ -136,34 +136,6 @@ def run_text_cleaning(streamer):
     with open('data/datasets/{s}/{s}.txt'.format(s=streamer), 'w') as f:
         f.write(out_text)
 
-def run_openai(streamer):
-    f = open(r'C:\Users\jonat\repos\Chatbot\api_keys\open_ai_api_key.txt', 'r')
-    key = f.read()
-    f.close()
-    client = OpenAI(api_key=key)
-
-    data = ''
-    with open('data/streamers/datasets/{s}/{s}.txt'.format(s=streamer), 'r') as f:
-        data = f.read()
-    
-    tokenized_chunks = token_chunking(data)
-    print(tokenized_chunks[0])
-    chunks_len = len(tokenized_chunks)
-    prompts = [f'Remove adjacent repeated words and phrases from the following text: {chunk}' for chunk in tokenized_chunks]
-    prompts = prompts[:10]
-
-    response = client.completions.create(
-        model="gpt-3.5-turbo-instruct",
-        prompt=prompts,
-        max_tokens=100
-    )
-    cleaned_text = [''] * len(prompts)
-    for choice in response.choices:
-        cleaned_text[choice.index] = choice.text
-
-
-    print(cleaned_text)
-
 def run_character_chunking(streamer):
     data = ''
     with open('data/datasets/{s}/{s}.txt'.format(s=streamer), 'r') as f:
