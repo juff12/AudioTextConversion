@@ -1,10 +1,16 @@
 from pyannote.audio import Pipeline
-from presets.opt_audio_to_text import opt
+import argparse
 import os
 from tqdm import tqdm
 import torch
 import torchaudio
 from pyannote.audio.pipelines.utils.hook import ProgressHook
+
+def args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dir', type=str, default='data/streamers/test', help='directory of files to be processed')
+    parser.add_argument('--reprocess_old', type=bool, default=False, help='reprocess old files')
+    return parser.parse_args()
 
 def get_audio_files(directory, audio_file_endings):
     audio_files = []
@@ -17,6 +23,8 @@ def get_audio_files(directory, audio_file_endings):
     return audio_files[0] # return the first audio file
 
 def main():
+    opt = args()
+
     # get access token
     with open('api_keys/hugging_face_token.txt', 'r') as file:
         token = file.read()

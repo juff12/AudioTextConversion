@@ -1,14 +1,10 @@
-import numpy as np
-import spacy
 import json
 import os
 import en_core_web_sm
 from nltk.tokenize import sent_tokenize
 from tqdm import tqdm
-import nltk
 from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenizer
 import emoji
-from openai import OpenAI
 import re
 from pathlib import Path
 import argparse
@@ -77,7 +73,6 @@ def format_block(chunk):
     text_block = ' '.join(chunk)
     text_block = text_block.replace(' .', '.').replace('  ', ' ').replace(' ,', ',').replace(' ?', '?').replace(' !', '!')
     return text_block
-
 
 def character_chunking(text, size=512):
     sents = sent_tokenize(text)
