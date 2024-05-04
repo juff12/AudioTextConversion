@@ -55,10 +55,6 @@ test2.py
 test3.py
 test4.py
 
-# working on
-audio_processor.py
-file_processor.py
-
 # data, keys, and notebooks
 data/
 api_keys/
