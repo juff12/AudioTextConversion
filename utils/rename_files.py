@@ -35,8 +35,8 @@ def reformat_data(files, dir):
     # reformat the csv files
     for f in files:
         new_data = []
-        try:
-            with open(os.path.join(dir,f"twitch-chat-{f}.csv"), 'r', encoding='utf8') as file:
+        if f.startswith('twitch-chat-'):
+            with open(os.path.join(dir,f), 'r', encoding='utf8') as file:
                 reader = csv.reader(file, delimiter=',', dialect=csv.excel_tab)
                 for i, row in enumerate(reader):
                     # skip the first row (titles)
@@ -47,9 +47,9 @@ def reformat_data(files, dir):
                     new_data.append(new_row)
             # save the new data to a csv file
             df = pd.DataFrame(new_data, columns=['time', 'username', 'message'])
-            df.to_csv(os.path.join(dir,f"{f}.csv"), index=False)
-        except: # if the file ends with CSV but does not contain the correct format, skips it
-            continue
+            new_name = f.replace('twitch-chat-', '')
+            df.to_csv(os.path.join(dir,new_name), index=False)
+
 def main():
     opt = args()
     dir = opt.dir
