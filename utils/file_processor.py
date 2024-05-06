@@ -177,13 +177,13 @@ class TextCleaner():
         previous = '' # set the first sentence
         for i, sentence in enumerate(sentences):
             if previous == '':
-                previous = sentence.text
+                previous = sentence
                 continue
-            if self.score_sentences(previous, sentence.text) > 0.85:
+            if self.score_sentences(previous, sentence) > 0.79:
                 sentences[i] = ''
                 continue
-            previous = sentence.text
-        text = ' '.join([sentence.text for sentence in sentences if sentence != ''])
+            previous = sentence
+        text = ' '.join([sentence for sentence in sentences if sentence != ''])
         return text
 
     def remove_emojis(self, text):
