@@ -67,7 +67,6 @@ def main():
         use_auth_token=token
     ).to(device)
 
-
     # set the main directory to process
     dir = opt.dir
     

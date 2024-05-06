@@ -10,6 +10,7 @@ from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 import json
 import pandas as pd
 from sentence_transformers import SentenceTransformer
+from pathlib import Path
 
 def args():
     parser = argparse.ArgumentParser()
@@ -272,6 +273,10 @@ def run_cleaning(opt):
 def main():
     opt = args()
     
+    # create the directory if it does not exist
+    Path(opt.dir).mkdir(parents=True, exist_ok=True)
+
+
     # get the data from youtube
     gather_data(opt.channel_url, opt.min_dur, opt.dir)
 
