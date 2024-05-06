@@ -1,12 +1,13 @@
 import json
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
 import argparse
 from utils import TextCleaner
+from tqdm import tqdm
+
 def args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='directory of files to be processed')
+    parser.add_argument('--time_seconds', type=int, default=3600, help='time in seconds to consider for getting the speakers')
     return parser.parse_args()
 
 def clean_matched_pairs(cleaner, file_path, time_seconds=3600):
@@ -35,10 +36,10 @@ def get_speakers_before_time(data, time_seconds=3600):
         # add the speakers to the lsit
         for speaker in data[i]['speaker_id']:
             if speaker not in speakers:
-                speakers.append(speaker)
+                speakers.add(speaker)
         i += 1
     return speakers
-
+    
 def main():
     opt = args()
     parent_dir = opt.dir
@@ -51,12 +52,12 @@ def main():
     cleaner = TextCleaner()
 
     # clean the json files
-    for file in files:
-        clean_matched_pairs(cleaner, file)
+    for file in tqdm(files):
+        clean_matched_pairs(cleaner, file, opt.time_seconds)
 
     # get the cleaned json files directory
     files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched' in f]
-    for f in files:
+    for f in tqdm(files):
         with open(f, 'r') as file:
             data = json.load(file)
         text = ' '.join([item['text'] for item in data])

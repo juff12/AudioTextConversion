@@ -10,6 +10,8 @@ def args():
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='directory of files to be processed')
     parser.add_argument('--thresh_1', type=float, default=0.3, help='threshold 1 for clustering')
     parser.add_argument('--thresh_2', type=float, default=0.6, help='threshold 2 for clustering')
+    parser.add_argument('--from_text', type=bool, default=False, help='use txt file instead of json')
+    parser.add_argument('--save_type', type=str, default='json', help='type of file to save as [json/txt]')
     return parser.parse_args()
 
 def main():
@@ -27,13 +29,22 @@ def main():
 
     for id in tqdm(files):
         try:
-            with open(os.path.join(dir,f"{id}/audio_text_{id}.json")) as file:
-                audio_text = json.load(file)
+            if opt.from_text:
+                with open(os.path.join(dir,f"{id}/clean_text_{id}.txt")) as file:
+                    audio_text = file.read()
+            else:
+                with open(os.path.join(dir,f"{id}/matched_{id}.json")) as file:
+                    audio_text = json.load(file)
+                audio_text = ' '.join([item['text'] for item in audio_text])
             # get the clusters
-            clusters_lens, final_texts = clusterer.cluster(audio_text['text'], thresh_1=opt.thresh_1, thresh_2=opt.thresh_2)
-
-            # save to json
-            clusterer.save_json(clusters_lens, final_texts, os.path.join(dir, f"{id}/clusters_{id}.json"))
+            cluster_topics, final_texts = clusterer.cluster(audio_text, thresh_1=opt.thresh_1, thresh_2=opt.thresh_2)
+            
+            # save the clusters based on type of save given
+            if opt.save_type == 'txt':
+                clusterer.save_txt(final_texts, os.path.join(dir, f"{id}/clusters_{id}.txt"))
+            elif opt.save_type == 'json':
+                # save to json
+                clusterer.save_json(cluster_topics, final_texts, os.path.join(dir, f"{id}/clusters_{id}.json"))
         except Exception as e:
             print(e)
             continue
