@@ -1,6 +1,7 @@
 import subprocess
 import argparse
 from utils import FilePreProcessing, ASRDiarization, TopicClustering, MessageMatcher, TextCleaner
+from utils.functions import get_audio_files, clean_matched_pairs
 from pyannote.audio import Pipeline
 import en_core_web_lg
 import os
@@ -46,13 +47,13 @@ def args():
     parser.add_argument('--from_text', type=bool, default=True, help='use txt file instead of json')
     parser.add_argument('--save_type', type=str, default='txt', help='type of file to save as [json/txt]')
     
-    # functions to run (all true by default)
-    parser.add_argument('--gather_data', type=bool, default=True, help='gather data from the youtube channel')
-    parser.add_argument('--run_preprocessing', type=bool, default=True, help='run preprocessing of the files (create subdirectories)')
-    parser.add_argument('--run_audio_processing', type=bool, default=True, help='run asr and diarization')
-    parser.add_argument('--run_matching', type=bool, default=True, help='run message matching')
-    parser.add_argument('--run_clustering', type=bool, default=True, help='run topic clustering')
-    parser.add_argument('--run_cleaning', type=bool, default=True, help='run cleaning of the matched files')
+    # functions to run (all false by default)
+    parser.add_argument('--gather_data', type=bool, default=False, help='gather data from the youtube channel')
+    parser.add_argument('--run_preprocessing', type=bool, default=False, help='run preprocessing of the files (create subdirectories)')
+    parser.add_argument('--run_audio_processing', type=bool, default=False, help='run asr and diarization')
+    parser.add_argument('--run_matching', type=bool, default=False, help='run message matching')
+    parser.add_argument('--run_clustering', type=bool, default=False, help='run topic clustering')
+    parser.add_argument('--run_cleaning', type=bool, default=False, help='run cleaning of the matched files')
     
     return parser.parse_args()
 
@@ -68,18 +69,6 @@ def gather_data(channel_url, min_length, dir):
 
     # Run the command to gather data
     subprocess.run(activate_cmd, shell=True)
-
-
-# returns the audio file from the directory
-def get_audio_files(directory, audio_file_endings):
-    audio_files = []
-    for file in os.listdir(directory):
-        for ending in audio_file_endings:
-            if file.endswith(ending):
-                audio_files.append(os.path.join(directory, file))
-    if len(audio_files) == 0:
-        return None
-    return audio_files[0] # return the first audio file
 
 def run_asrdiarization(opt):
     # set the device to use
@@ -220,36 +209,6 @@ def run_message_matching(opt):
         file_path = os.path.join(dir, f"{sub}/pairs_{sub}_{opt.match_thresh}_formatted.json")
         matcher.save_json(pairs, file_path)
 
-def clean_matched_pairs(cleaner, file_path, time_seconds=3600):
-    with open(file_path, 'r') as f:
-        data = json.load(f)
-    
-    # get the speakers before a certain time
-    speakers = get_speakers_before_time(data, time_seconds)
-    
-    # store all the data with the speakers in the segment of time in a new list
-    new_data = [item for item in data if any([True if speaker in speakers else False for speaker in item['speaker_id']])]
-    
-    ##########################
-    # Consider adding partial cleaning here, currently the speed is slow so it isnt worth it
-    ##########################
-
-    with open(file_path.replace('matched', 'clean_matched'), 'w') as f:
-        json.dump(new_data, f, indent=4)
-
-# get the speakers befor a certain time
-def get_speakers_before_time(data, time_seconds=3600):
-    # get the speakers before a certain time
-    i = 0
-    speakers = set()
-    while data[i]['timestamp'][0] < time_seconds:
-        # add the speakers to the lsit
-        for speaker in data[i]['speaker_id']:
-            if speaker not in speakers:
-                speakers.add(speaker)
-        i += 1
-    return speakers
-
 def run_cleaning(opt):
     parent_dir = opt.dir
     # get the sub directories
@@ -275,7 +234,6 @@ def run_cleaning(opt):
         # save the cleaned text as a txt file
         with open(f.replace('clean_matched', 'clean_text').replace('.json', '.txt'), 'w') as file:
             file.write(cleaned_text)
-
 
 def main():
     opt = args()
