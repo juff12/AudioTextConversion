@@ -273,7 +273,7 @@ def main():
     opt = args()
     
     # get the data from youtube
-    #gather_data(opt.channel_url, opt.min_dur, opt.dir)
+    gather_data(opt.channel_url, opt.min_dur, opt.dir)
 
     # initialize the file preprocessor
     preprocessor = FilePreProcessing(opt.dir, is_yt=False, has_twc=False)
@@ -282,13 +282,13 @@ def main():
     preprocessor.prepare_files()
 
     # process the audio files
-    #run_asrdiarization(opt)
+    run_asrdiarization(opt)
 
     # clean the files
-    #run_cleaning(opt)
+    run_cleaning(opt)
 
     # run the topic clustering
-    #run_topic_clustering(opt)
+    run_topic_clustering(opt)
 
     # match
     if opt.twc:
