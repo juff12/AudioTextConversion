@@ -5,12 +5,18 @@ import re
 import csv
 import pandas as pd
 import json
-from nltk.tokenize import sent_tokenize
+from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenizer
 import emoji
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
 import en_core_web_lg
+import gensim
+from gensim.corpora import Dictionary
+from gensim.models import LdaModel
+from nltk.corpus import stopwords
+import string
+
 
 class FilePreProcessing():
     def __init__(self, directory, is_yt=False, has_twc=False):
@@ -276,12 +282,13 @@ class TopicClustering():
     def __init__(self, nlp):
         self.nlp = nlp
         self.cleaner = TextCleaner()
+        self.stop_words = set(stopwords.words('english'))
+        self.punc = set(string.punctuation)
 
     def process(self, text):
         doc = self.nlp(text)
         sents = list(doc.sents)
         vecs = np.stack([sent.vector / sent.vector_norm for sent in sents])
-
         return sents, vecs
     
     def cluster_text(self, sents, vecs, threshold):
@@ -291,12 +298,11 @@ class TopicClustering():
             if np.dot(vecs[i], vecs[i-1]) < threshold:
                 clusters.append([])
             clusters[-1].append(i)
-        
         return clusters
 
     def cluster(self, text, thresh_1=0.3, thresh_2=0.6):
         # Initialize the clusters lengths list and final texts list
-        clusters_lens = []
+        cluster_topics = []
         final_texts = []
 
         # Process the chunk
@@ -325,26 +331,46 @@ class TopicClustering():
                     if div_len < 60 or div_len > 3000:
                         continue
                     
-                    clusters_lens.append(div_len)
+                    # TODO: get the topic of the cluster
+                    topic = self.cluster_topics(sent_tokenize(div_txt))
+                    cluster_topics.append(topic)
                     final_texts.append(div_txt)
                     
             else:
-                clusters_lens.append(cluster_len)
+                # TODO: get the topic of the cluster
+                topic = self.cluster_topics(sent_tokenize(cluster_txt))
+                cluster_topics.append(topic)
                 final_texts.append(cluster_txt)
-        return clusters_lens, final_texts
-    
-    def save_json(self, clusters_lens, final_texts, filename):
+        return cluster_topics, final_texts
+
+    def cluster_topics(self, cluster_txt):
+        # TODO: get the topic of the cluster
+        return 0
+
+    def save_json(self, cluster_topics, final_texts, filename):
         try:
             # save the data
             with open(filename, 'w') as file:
                 # zip the clusters and texts for itteration
-                zipped_obj = zip(clusters_lens, final_texts)
-                data = [{'cluster': cluster, 'text': text} for cluster, text in zipped_obj]
+                zipped_obj = zip(cluster_topics, final_texts)
+                data = [{'topic': topic, 'text': text} for topic, text in zipped_obj]
                 json.dump(data, file, indent=4)
         except Exception as e: # file couldnt be opened or no data to save
             print('Error saving json file')
             print("Error: ", e)
     
+    def save_txt(self, final_texts, filename):
+        try:
+            # save the data
+            with open(filename, 'w') as file:
+                # write each line on a newline
+                for text in final_texts:
+                    text = text + '\n'
+                    file.write(text)
+        except Exception as e: # file couldnt be opened or no data to save
+            print('Error saving text file')
+            print("Error: ", e)
+
 class MessageMatcher():
     def __init__(self, model, sim_cutoff=0.7, history_limit=40, threshold=0.5,
                  forward_chunks=0, backward_chunks=10, delay=10, multi_match=False):
