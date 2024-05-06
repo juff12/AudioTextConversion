@@ -9,7 +9,7 @@ from nltk.tokenize import sent_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenizer
 import emoji
 import numpy as np
-from sentence_transformers import util
+from sentence_transformers import SentenceTransformer, util
 
 class FilePreProcessing():
     def __init__(self, directory, is_yt=False, has_twc=False):
@@ -125,6 +125,7 @@ class TextCleaner():
     def __init__(self,):
         self.tokenizer = TreebankWordTokenizer()
         self.detokenizer = TreebankWordDetokenizer()
+        self.semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.clean_json_text = None
         self.clean_txt_text = None
 
@@ -144,20 +145,47 @@ class TextCleaner():
         return text
 
     def remove_repeat(self, text):
+        punctuation = ['.', ',', '?', '!']
         tokens = self.tokenizer.tokenize(text)  # Tokenize the text
         # Check if the tokens array is empty
         if len(tokens) == 0:
             return text
         cleaned_tokens = [tokens[0]]  # Initialize list with first token
-
+        prev_token = tokens[0]  # Initialize previous token with first token        
         # Iterate through the tokens, skipping repetitions
         for i in range(1, len(tokens)):
             # Check if the current token is the same as the previous one
-            if tokens[i] != tokens[i - 1]:
+            if tokens[i] in punctuation:
+                cleaned_tokens.append(tokens[i])
+            elif tokens[i] != prev_token:
                 cleaned_tokens.append(tokens[i])  # If not the same, add to cleaned list
+                prev_token = tokens[i]
         cleaned_text = self.detokenizer.detokenize(cleaned_tokens)  # Detokenize the cleaned tokens
         return cleaned_text  # Return the cleaned tokens array
     
+    def score_sentences(self, prev_sent, curr_sent):
+        # get the embedding of the sentence
+        prev_sent = self.semantic_model.encode(prev_sent, convert_to_tensor=True)
+        curr_sent = self.semantic_model.encode(curr_sent, convert_to_tensor=True)
+        # calculate the cosine similarity between the message and the spam and ham embeddings
+        score = util.cos_sim(prev_sent, curr_sent)
+        return score.cpu().numpy().flatten()[0]
+
+    def remove_similar_repeats(self, text):
+        # remove similar repeated sentences
+        sentences = sent_tokenize(text)
+        previous = '' # set the first sentence
+        for i, sentence in enumerate(sentences):
+            if previous == '':
+                previous = sentence.text
+                continue
+            if self.score_sentences(previous, sentence.text) > 0.85:
+                sentences[i] = ''
+                continue
+            previous = sentence.text
+        text = ' '.join([sentence.text for sentence in sentences if sentence != ''])
+        return text
+
     def remove_emojis(self, text):
         # Remove emojis from text
         cleaned_text = ''.join(c for c in text if c not in emoji.EMOJI_DATA)
@@ -184,6 +212,8 @@ class TextCleaner():
         text = self.remove_repeat_sents(text)
         # remove repeated words and phrases
         text = self.remove_repeat(text)
+        # remove similar repeated sentences
+        text = self.remove_similar_repeats(text)
         # fix spacing
         text = self.fix_spacing(text)
         return text
