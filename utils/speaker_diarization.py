@@ -53,8 +53,7 @@ def main():
             # create a pipeline for audio to text and diarization
             with ProgressHook() as hook:        
                 diarization = diarization_pipeline({"waveform": waveform, "sample_rate": sample_rate}, hook=hook)
-            print(type(diarization))
-            
+            # save the diarization to a file
             with open(output_file, 'w') as file:
                 diarization.write_rttm(file)
         except:
