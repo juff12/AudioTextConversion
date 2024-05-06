@@ -5,22 +5,13 @@ from tqdm import tqdm
 import torch
 import torchaudio
 from pyannote.audio.pipelines.utils.hook import ProgressHook
+from utils.functions import get_audio_files
 
 def args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='directory of files to be processed')
     parser.add_argument('--reprocess_old', type=bool, default=False, help='reprocess old files')
     return parser.parse_args()
-
-def get_audio_files(directory, audio_file_endings):
-    audio_files = []
-    for file in os.listdir(directory):
-        for ending in audio_file_endings:
-            if file.endswith(ending):
-                audio_files.append(os.path.join(directory, file))
-    if len(audio_files) == 0:
-        return None
-    return audio_files[0] # return the first audio file
 
 def main():
     opt = args()

@@ -1,4 +1,5 @@
 from utils import ASRDiarization
+from utils.functions import get_audio_files
 from pyannote.audio import Pipeline
 import os
 from tqdm import tqdm
@@ -16,16 +17,6 @@ def args():
     parser.add_argument('--save_asr', type=bool, default=True, help='save the asr files as separate json files')
     parser.add_argument('--save_diarization', type=bool, default=True, help='save the diarization files as separate rttm files')
     return parser.parse_args()
-
-def get_audio_files(directory, audio_file_endings):
-    audio_files = []
-    for file in os.listdir(directory):
-        for ending in audio_file_endings:
-            if file.endswith(ending):
-                audio_files.append(os.path.join(directory, file))
-    if len(audio_files) == 0:
-        return None
-    return audio_files[0] # return the first audio file
 
 def main():
     # get hyperparameters

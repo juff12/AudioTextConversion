@@ -2,6 +2,7 @@ import json
 import os
 import argparse
 from utils import TextCleaner
+from utils.functions import clean_matched_pairs
 from tqdm import tqdm
 
 def args():
@@ -9,36 +10,6 @@ def args():
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='directory of files to be processed')
     parser.add_argument('--time_seconds', type=int, default=3600, help='time in seconds to consider for getting the speakers')
     return parser.parse_args()
-
-def clean_matched_pairs(cleaner, file_path, time_seconds=3600):
-    with open(file_path, 'r') as f:
-        data = json.load(f)
-    
-    # get the speakers before a certain time
-    speakers = get_speakers_before_time(data, time_seconds)
-    
-    # store all the data with the speakers in the segment of time in a new list
-    new_data = [item for item in data if any([True if speaker in speakers else False for speaker in item['speaker_id']])]
-    
-    ##########################
-    # Consider adding partial cleaning here, currently the speed is slow so it isnt worth it
-    ##########################
-
-    with open(file_path.replace('matched', 'clean_matched'), 'w') as f:
-        json.dump(new_data, f, indent=4)
-
-# get the speakers befor a certain time
-def get_speakers_before_time(data, time_seconds=3600):
-    # get the speakers before a certain time
-    i = 0
-    speakers = set()
-    while data[i]['timestamp'][0] < time_seconds:
-        # add the speakers to the lsit
-        for speaker in data[i]['speaker_id']:
-            if speaker not in speakers:
-                speakers.add(speaker)
-        i += 1
-    return speakers
     
 def main():
     opt = args()
