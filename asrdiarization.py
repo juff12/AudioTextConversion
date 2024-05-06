@@ -81,23 +81,27 @@ def main():
     sub_dirs = os.listdir(dir)
 
     for sub in tqdm(sub_dirs):
-        # audio directory
-        audio_dir = os.path.join(dir, sub)
-        audio_file = get_audio_files(audio_dir, endings)
-        
-        if opt.load_files:
-            audio_file = os.path.join(audio_dir, f'audio_text_{sub}.json')
-            diarization_file = os.path.join(audio_dir, f'diarization_{sub}.rttm')
-            # from files matching the diarization and asr
-            matched_text = matcher.process_from_files(audio_file, diarization_file)
-        else:
-            # match the diarization and asr
-            matched_text = matcher.process_audio(audio_file, save_dir=audio_dir,
-                                                 save_id=sub, save_asr=opt.save_asr,
-                                                 save_diarization=opt.save_diarization)
-        # save the pairs to a json file
-        file_path = os.path.join(audio_dir, f"matched_{sub}.json")
-        matcher.save_json(matched_text, file_path)
+        try:
+            # audio directory
+            audio_dir = os.path.join(dir, sub)
+            audio_file = get_audio_files(audio_dir, endings)
+            
+            if opt.load_files:
+                audio_file = os.path.join(audio_dir, f'audio_text_{sub}.json')
+                diarization_file = os.path.join(audio_dir, f'diarization_{sub}.rttm')
+                # from files matching the diarization and asr
+                matched_text = matcher.process_from_files(audio_file, diarization_file)
+            else:
+                # match the diarization and asr
+                matched_text = matcher.process_audio(audio_file, save_dir=audio_dir,
+                                                    save_id=sub, save_asr=opt.save_asr,
+                                                    save_diarization=opt.save_diarization)
+            # save the pairs to a json file
+            file_path = os.path.join(audio_dir, f"matched_{sub}.json")
+            matcher.save_json(matched_text, file_path)
+        except Exception as e:
+            print(e)
+            continue
 
 if __name__ == "__main__":
     main()
