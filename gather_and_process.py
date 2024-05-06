@@ -28,7 +28,6 @@ def args():
     parser.add_argument('--save_diarization', type=bool, default=True, help='save the diarization files as separate rttm files')
     
     # arguments for matching the text
-    parser.add_argument('--twc', type=bool, default=False, help='use twc data for matching') # mark true if twc is available and want matching
     parser.add_argument('--sent_model', type=str, default='multi-qa-MiniLM-L6-cos-v1', help='name of the sentence transformer semantic model')
     parser.add_argument('--sim_cutoff', type=float, default=0.7, help='similarity cutoff for message matching')
     parser.add_argument('--history_limit', type=int, default=40, help='maximum number of previous messages to consider for matching')
@@ -46,6 +45,14 @@ def args():
     parser.add_argument('--cluster_thresh_2', type=float, default=0.6, help='threshold 2 for clustering')
     parser.add_argument('--from_text', type=bool, default=True, help='use txt file instead of json')
     parser.add_argument('--save_type', type=str, default='txt', help='type of file to save as [json/txt]')
+    
+    # functions to run (all true by default)
+    parser.add_argument('--gather_data', type=bool, default=True, help='gather data from the youtube channel')
+    parser.add_argument('--run_preprocessing', type=bool, default=True, help='run preprocessing of the files (create subdirectories)')
+    parser.add_argument('--run_audio_processing', type=bool, default=True, help='run asr and diarization')
+    parser.add_argument('--run_matching', type=bool, default=True, help='run message matching')
+    parser.add_argument('--run_clustering', type=bool, default=True, help='run topic clustering')
+    parser.add_argument('--run_cleaning', type=bool, default=True, help='run cleaning of the matched files')
     
     return parser.parse_args()
 
@@ -276,27 +283,30 @@ def main():
     # create the directory if it does not exist
     Path(opt.dir).mkdir(parents=True, exist_ok=True)
 
-
     # get the data from youtube
-    gather_data(opt.channel_url, opt.min_dur, opt.dir)
+    if opt.gather_data:
+        gather_data(opt.channel_url, opt.min_dur, opt.dir)
 
     # initialize the file preprocessor
-    preprocessor = FilePreProcessing(opt.dir, is_yt=False, has_twc=False)
-
-    # create subdirectories for the data and movde the videos
-    preprocessor.prepare_files()
+    if opt.run_preprocessing:
+        preprocessor = FilePreProcessing(opt.dir, is_yt=False, has_twc=False)
+        # create subdirectories for the data and movde the videos
+        preprocessor.prepare_files()
 
     # process the audio files
-    run_asrdiarization(opt)
+    if opt.run_audio_processing:
+        run_asrdiarization(opt)
 
     # clean the files
-    run_cleaning(opt)
+    if opt.run_cleaning:
+        run_cleaning(opt)
 
     # run the topic clustering
-    run_topic_clustering(opt)
+    if opt.run_clustering:
+        run_topic_clustering(opt)
 
     # match
-    if opt.twc:
+    if opt.run_matching:
         run_message_matching(opt)
 
 if __name__=="__main__":
