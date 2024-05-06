@@ -42,7 +42,7 @@ class FilePreProcessing():
         csv_files = [x for x in os.listdir(self.dir) if x.endswith('.csv')]
 
         # create a list of subdirectories from the audio file names
-        sub_dirs = [self.create_subdir_names(x, self.audio_extensions) for x in os.listdir(self.dir) if check_audio_end(x, self.audio_extensions)]
+        sub_dirs = [self.create_subdir_names(x) for x in os.listdir(self.dir) if check_audio_end(x, self.audio_extensions)]
         sub_dirs = [x for x in sub_dirs if x is not None] # remove None values
         
         # files to move
@@ -118,12 +118,12 @@ class FilePreProcessing():
             dir = os.path.join(self.dir, sub)
             Path(dir).mkdir(parents=True, exist_ok=True)
     
-    def get_audio_files(self, directory, audio_file_endings):
+    def get_audio_files(self):
         audio_files = []
-        for file in os.listdir(directory):
-            for ending in audio_file_endings:
+        for file in os.listdir(self.dir):
+            for ending in self.audio_extensions:
                 if file.endswith(ending):
-                    audio_files.append(os.path.join(directory, file))
+                    audio_files.append(os.path.join(self.dir, file))
         if len(audio_files) == 0:
             return None
         return audio_files[0] # return the first audio file
