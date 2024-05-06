@@ -10,6 +10,7 @@ from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenize
 import emoji
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
+import en_core_web_lg
 
 class FilePreProcessing():
     def __init__(self, directory, is_yt=False, has_twc=False):
@@ -126,26 +127,28 @@ class TextCleaner():
         self.tokenizer = TreebankWordTokenizer()
         self.detokenizer = TreebankWordDetokenizer()
         self.semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.nlp = en_core_web_lg.load()
         self.clean_json_text = None
         self.clean_txt_text = None
+        self.punc = ['.', ',', '?', '!']
 
-    def remove_repeat_sents(self, text):
-        sentences = sent_tokenize(text)
-        current = ''
-        for i, sentence in enumerate(sentences):
-            if current == '':
-                current = sentence
-                continue
-            if sentence == current:
-                sentences[i] = ''
-                continue
-            elif sentence != current:
-                current = sentence
-        text = ' '.join([sentence for sentence in sentences if sentence != ''])
-        return text
-
+    def remove_repeat_punct(self, text):
+        # remove repeated punctuation
+        tokens = self.tokenizer.tokenize(text)
+        # Check if the tokens array is empty
+        if len(tokens) == 0:
+            return text
+        # Iterate through the tokens, skipping repetitions of punctuation
+        for i in range(1, len(tokens)):
+            if tokens[i] in self.punc and tokens[i-1] in self.punc:
+                if tokens[i] == '.' and tokens[i-1] == '.': # dont remove ellipsis
+                    continue
+                tokens[i] = ''
+        # reconstruct the text
+        cleaned_text = self.detokenizer.detokenize(tokens)
+        return cleaned_text
+    
     def remove_repeat(self, text):
-        punctuation = ['.', ',', '?', '!']
         tokens = self.tokenizer.tokenize(text)  # Tokenize the text
         # Check if the tokens array is empty
         if len(tokens) == 0:
@@ -155,12 +158,13 @@ class TextCleaner():
         # Iterate through the tokens, skipping repetitions
         for i in range(1, len(tokens)):
             # Check if the current token is the same as the previous one
-            if tokens[i] in punctuation:
+            if tokens[i] in self.punc:
                 cleaned_tokens.append(tokens[i])
             elif tokens[i] != prev_token:
                 cleaned_tokens.append(tokens[i])  # If not the same, add to cleaned list
                 prev_token = tokens[i]
         cleaned_text = self.detokenizer.detokenize(cleaned_tokens)  # Detokenize the cleaned tokens
+        cleaned_text = self.remove_repeat_punct(cleaned_text) # remove repeated punctuation
         return cleaned_text  # Return the cleaned tokens array
     
     def score_sentences(self, prev_sent, curr_sent):
@@ -171,7 +175,7 @@ class TextCleaner():
         score = util.cos_sim(prev_sent, curr_sent)
         return score.cpu().numpy().flatten()[0]
 
-    def remove_similar_repeats(self, text):
+    def remove_repeat_sents(self, text):
         # remove similar repeated sentences
         sentences = sent_tokenize(text)
         previous = '' # set the first sentence
@@ -179,7 +183,7 @@ class TextCleaner():
             if previous == '':
                 previous = sentence
                 continue
-            if self.score_sentences(previous, sentence) > 0.79:
+            if sentence == previous or self.score_sentences(previous, sentence) > 0.79:
                 sentences[i] = ''
                 continue
             previous = sentence
@@ -203,17 +207,26 @@ class TextCleaner():
         text = text.replace(' ?', '?').replace(' !', '!')
         return text
 
+    def restore_punctuation(self, text):
+        # retore the punctuation, source code modified for smaller chunks
+        # text = self.punc_model.restore_punctuation(text)
+        punc_text = self.nlp(text)
+        text = ' '.join([token.text for token in punc_text.sents])
+        return text
+
     def clean_text(self, text):
         # remove emojis
         text = self.remove_emojis(text)
         # remove unicode characters
         text = self.remove_unicode(text)
+        # remove repeats, again
+        text = self.remove_repeat(text)
+        # restore the punctuation
+        text = self.restore_punctuation(text)
         # remove repeat sentences
         text = self.remove_repeat_sents(text)
-        # remove repeated words and phrases
+        # remove repeats again
         text = self.remove_repeat(text)
-        # remove similar repeated sentences
-        text = self.remove_similar_repeats(text)
         # fix spacing
         text = self.fix_spacing(text)
         return text
