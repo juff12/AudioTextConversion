@@ -24,7 +24,9 @@ class FilePreProcessing():
         self.yt = is_yt
         self.twc = has_twc
         self.audio_extensions = ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma', '.m4a']
-
+        # lambda function for checking if a file is an audio file
+        self.check_audio_end = lambda x, endings: any([x.endswith(ending) for ending in endings])
+    
     def prepare_files(self):
         # rename the youtube files
         if self.yt:
@@ -32,17 +34,16 @@ class FilePreProcessing():
         # process the twc files if the user wants to
         if self.twc:
             self.reformat_twc_files()
-
-        # function to check that the file is an audio file ending
-        check_audio_end = lambda x, endings: any([x.endswith(ending) for ending in endings])
-
+        
         # create a list of the files to create subdirectories for
-        audio_files = [x for x in os.listdir(self.dir) if check_audio_end(x, self.audio_extensions)]
+        audio_files = [x for x in os.listdir(self.dir) 
+                       if self.check_audio_end(x, self.audio_extensions)]
         # get the csv files for twc
         csv_files = [x for x in os.listdir(self.dir) if x.endswith('.csv')]
 
         # create a list of subdirectories from the audio file names
-        sub_dirs = [self.create_subdir_names(x) for x in os.listdir(self.dir) if check_audio_end(x, self.audio_extensions)]
+        sub_dirs = [self.create_subdir_names(x) for x in os.listdir(self.dir) 
+                    if self.check_audio_end(x, self.audio_extensions)]
         sub_dirs = [x for x in sub_dirs if x is not None] # remove None values
         
         # files to move
@@ -50,6 +51,9 @@ class FilePreProcessing():
 
         # create subdirectories
         self.create_subdirs(sub_dirs)
+
+        # remove invalid files
+        self.remove_bad_files(sub_dirs)
 
         # move the audio and csv files to the correct subdirectories
         self.move_files(sub_dirs, files)
@@ -102,16 +106,33 @@ class FilePreProcessing():
                 os.rename(os.path.join(self.dir, file), os.path.join(self.dir, new_name))
             except:
                 pass
-    
+
+    def remove_bad_files(self, subs):
+        # remove the invalid files
+        for file in os.listdir(self.dir):
+            # skip subdirectories
+            # checks if the files is an audio file or csv file and that it contains a sub directory as part of the name
+            if (file in subs or ((self.check_audio_end(file, self.audio_extensions) or file.endswith('.csv')) 
+                and any([True if sub in file else False for sub in subs]))):
+                continue
+            else:
+                # remove invalid files
+                os.remove(os.path.join(self.dir, file))
+
     def move_files(self, subs, files):
         for sub in subs:
             # get the files that cotain the sub string
             file_list = [file for file in files if sub in file]
             # loop through each file and move it to the correct subdirectory
             for file in file_list:
-                curr_loc = os.path.join(self.dir, file)
-                new_loc = os.path.join(self.dir, sub, file)
-                shutil.move(curr_loc, new_loc)
+                # function to check that the file is an audio file ending
+                if self.check_audio_end(file, self.audio_extensions) or file.endswith('.csv'):
+                    curr_loc = os.path.join(self.dir, file)
+                    new_loc = os.path.join(self.dir, sub, file)
+                    shutil.move(curr_loc, new_loc)
+                else:
+                    # remove invalid files
+                    os.remove(os.path.join(self.dir, file))
 
     def create_subdirs(self, subs):
         for sub in subs:
