@@ -243,6 +243,58 @@ class TextCleaner():
         text = ' '.join([token.text for token in punc_text.sents])
         return text
 
+    # remove n-gram repeats
+    def remove_ngrams_sent(self, sent):
+        split_sent = sent.split(' ')
+        # maximum length of a repeat can only be 1/2 the total words in sentence
+        max_ngram = len(split_sent) // 2
+        winsz = max_ngram
+        # iterate through each window size
+        while winsz > 0:
+            # iterate through each starting position
+            i = 0
+            while i + winsz < len(split_sent) and i + 2 * winsz <= len(split_sent):
+                # start of the first window
+                end_w1 = i + winsz
+                # start of the second window
+                end_w2 = end_w1 + winsz
+                # check if the subsets are equivalent
+                subset_1 = split_sent[i:end_w1]
+                subset_2 = split_sent[end_w1:end_w2]
+                # convert the subsets to lowercase
+                subset_1 = [word.lower() for word in subset_1]
+                subset_2 = [word.lower() for word in subset_2]
+                #print(f"subset_1: {subset_1}, subset_2: {subset_2}")
+                # if the subsets are equivalent, remove the second subset
+                if subset_1 == subset_2:
+                    # remove the second subset
+                    for _ in range(winsz):
+                        split_sent.pop(end_w1)
+                else:
+                    i += 1
+            # reduce the window size
+            winsz -= 1
+            # update the max ngram
+            max_ngram = len(split_sent) // 2
+            # if the max_ngram is smaller, select that
+            winsz = min(winsz, max_ngram)
+        return ' '.join(split_sent)
+
+    def remove_ngrams(self, text):
+        # remove n-grams from the text
+        sentences = sent_tokenize(text)
+        for i in range(len(sentences)):
+            # get the punctuation
+            punc = sentences[i][-1]
+            # remove commas and ellipsis
+            temp_sent = sentences[i].replace(',', '').replace('...', ' ')
+            # remove the ngrams from the sentence
+            sentences[i] = self.remove_ngrams_sent(temp_sent)
+            # add the punctuation back
+            sentences[i] = sentences[i] + punc
+        text = ' '.join(sentences)
+        return text
+
     def clean_text(self, text):
         # remove emojis
         text = self.remove_emojis(text)
@@ -250,6 +302,8 @@ class TextCleaner():
         text = self.remove_unicode(text)
         # remove repeats, again
         text = self.remove_repeat(text)
+        # remove n-grams
+        text = self.remove_ngrams(text)
         # restore the punctuation
         text = self.restore_punctuation(text)
         # remove repeat sentences
