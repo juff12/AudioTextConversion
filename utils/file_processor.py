@@ -377,7 +377,7 @@ class TopicClustering():
             clusters[-1].append(i)
         return clusters
 
-    def cluster(self, text, thresh_1=0.3, thresh_2=0.6):
+    def cluster(self, text, thresh_1=0.3, thresh_2=0.6, min_len=60, max_len=3000):
         # Initialize the clusters lengths list and final texts list
         cluster_topics = []
         final_texts = []
@@ -393,11 +393,11 @@ class TopicClustering():
             cluster_len = len(cluster_txt)
             
             # Check if the cluster is too short
-            if cluster_len < 60:
+            if cluster_len < min_len:
                 continue
             
             # Check if the cluster is too long
-            elif cluster_len > 3000:
+            elif cluster_len > max_len:
                 sents_div, vecs_div = self.process(cluster_txt)
                 reclusters = self.cluster_text(sents_div, vecs_div, thresh_2)
                 

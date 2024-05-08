@@ -1,7 +1,7 @@
 import subprocess
 import argparse
 from utils import FilePreProcessing, ASRDiarization, TopicClustering, MessageMatcher, TextCleaner
-from utils.functions import get_audio_files, clean_matched_pairs
+from utils.functions import get_audio_files, clean_matched_speakers
 from pyannote.audio import Pipeline
 import en_core_web_lg
 import os
@@ -46,10 +46,12 @@ def args():
     parser.add_argument('--time_seconds', type=int, default=3600, help='time in seconds to consider for getting the speakers')
 
     # arguments for topic clustering
-    parser.add_argument('--cluster_thresh_1', type=float, default=0.3, help='threshold 1 for clustering')
+    parser.add_argument('--cluster_thresh_1', type=float, default=0.35, help='threshold 1 for clustering')
     parser.add_argument('--cluster_thresh_2', type=float, default=0.6, help='threshold 2 for clustering')
     parser.add_argument('--from_text', type=bool, default=True, help='use txt file instead of json')
     parser.add_argument('--save_type', type=str, default='txt', help='type of file to save as [json/txt]')
+    parser.add_argument('--min_cluster_len', type=int, default=60, help='minimum length of cluster')
+    parser.add_argument('--max_cluster_len', type=int, default=2048, help='maximum length of cluster')
     
     # functions to run (all false by default)
     parser.add_argument('--gather_data', type=bool, default=False, help='gather data from the youtube channel')
@@ -170,7 +172,9 @@ def run_topic_clustering(opt):
             # get the clusters
             cluster_topics, final_texts = clusterer.cluster(audio_text,
                                                             thresh_1=opt.cluster_thresh_1,
-                                                            thresh_2=opt.cluster_thresh_2)
+                                                            thresh_2=opt.cluster_thresh_2,
+                                                            min_len=opt.min_cluster_len,
+                                                            max_len=opt.max_cluster_len)
             
             # save the clusters based on type of save given
             if opt.save_type == 'txt':
@@ -225,7 +229,7 @@ def run_cleaning(opt):
 
     # clean the json files
     for file in tqdm(files):
-        clean_matched_pairs(cleaner, file, opt.time_seconds)
+        clean_matched_speakers(cleaner, file, opt.time_seconds)
 
     # get the cleaned json files directory
     files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched' in f]
