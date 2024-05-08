@@ -19,7 +19,11 @@ def args():
     parser.add_argument('--channel_url', type=str, default='', help='The url of the youtube channel to download the videos from')
     parser.add_argument('--min_dur', type=str, default=1800, help='the minimum length of video to download')
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='the parent directory to save to')
-    
+    parser.add_argument('--fragments', type=int, default=1, help='number of concurrent fragments to download[set to 16 for twitch downloads]')
+
+    # arguments for preprocessing
+    parser.add_argument('--formatt_twc', type=bool, default=False, help='format the twitch chat csv files')
+
     # arguments for asr and diarization
     parser.add_argument('--api_key_loc', type=str, default='api_keys/hugging_face_token.txt', help='location of the api key to access the hugging face models')
     parser.add_argument('--asr_model', type=str, default='openai/whisper-large-v3', help='name of the asr model')
@@ -57,13 +61,12 @@ def args():
     
     return parser.parse_args()
 
-
-def gather_data(channel_url, min_length, dir):
+def gather_data(channel_url, min_length, dir, fragments):
     # name of the conda environment
     conda_env = 'youtube-env'
 
     # command to run 
-    command = f'yt-dlp --match-filter="duration>{min_length}" -ciw -o "{dir}/%(id)s.%(ext)s" -x --audio-format wav --audio-quality 0 --restrict-filenames {channel_url}'
+    command = f'yt-dlp -N {fragments} --match-filter="duration>{min_length}" -ciw -o "{dir}/%(id)s.%(ext)s" -x --audio-format wav --audio-quality 0 --restrict-filenames {channel_url}'
 
     activate_cmd = f'conda activate {conda_env} && {command}'
 
@@ -156,10 +159,11 @@ def run_topic_clustering(opt):
 
     for id in tqdm(files):
         try:
+            # if the text cluster data is stored in a txt file, use this
             if opt.from_text:
                 with open(os.path.join(dir,f"{id}/clean_text_{id}.txt")) as file:
                     audio_text = file.read()
-            else:
+            else: # else cluster from the json file
                 with open(os.path.join(dir,f"{id}/matched_{id}.json")) as file:
                     audio_text = json.load(file)
                 audio_text = ' '.join([item['text'] for item in audio_text])
@@ -243,11 +247,13 @@ def main():
 
     # get the data from youtube
     if opt.gather_data:
-        gather_data(opt.channel_url, opt.min_dur, opt.dir)
+        gather_data(opt.channel_url, opt.min_dur, opt.dir, opt.fragments)
 
     # initialize the file preprocessor
     if opt.run_preprocessing:
-        preprocessor = FilePreProcessing(opt.dir, is_yt=False, has_twc=False)
+        # it_yt is always FALSE because this script downloads the videos with the correct
+        # file names and formats
+        preprocessor = FilePreProcessing(opt.dir, is_yt=False, has_twc=opt.formatt_twc)
         # create subdirectories for the data and movde the videos
         preprocessor.prepare_files()
 
