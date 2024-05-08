@@ -16,6 +16,7 @@ from pathlib import Path
 def args():
     parser = argparse.ArgumentParser()
     # arguments for gathering data
+    parser.add_argument('--conda_env', type=str, default='youtube-env', help='name of the conda environment to use')
     parser.add_argument('--channel_url', type=str, default='', help='The url of the youtube channel to download the videos from')
     parser.add_argument('--min_dur', type=str, default=1800, help='the minimum length of video to download')
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='the parent directory to save to')
@@ -63,9 +64,9 @@ def args():
     
     return parser.parse_args()
 
-def gather_data(channel_url, min_length, dir, fragments):
+def gather_data(conda_env, channel_url, min_length, dir, fragments):
     # name of the conda environment
-    conda_env = 'youtube-env'
+    conda_env = conda_env
 
     # command to run 
     command = f'yt-dlp -N {fragments} --match-filter="duration>{min_length}" -ciw -o "{dir}/%(id)s.%(ext)s" -x --audio-format wav --audio-quality 0 --restrict-filenames {channel_url}'
@@ -251,7 +252,7 @@ def main():
 
     # get the data from youtube
     if opt.gather_data:
-        gather_data(opt.channel_url, opt.min_dur, opt.dir, opt.fragments)
+        gather_data(opt.conda_env, opt.channel_url, opt.min_dur, opt.dir, opt.fragments)
 
     # initialize the file preprocessor
     if opt.run_preprocessing:
