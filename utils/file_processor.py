@@ -31,9 +31,6 @@ class FilePreProcessing():
         # rename the youtube files
         if self.yt:
             self.rename_yt_files()
-        # process the twc files if the user wants to
-        if self.twc:
-            self.reformat_twc_files()
         
         # create a list of the files to create subdirectories for
         audio_files = [x for x in os.listdir(self.dir) 
@@ -58,12 +55,17 @@ class FilePreProcessing():
         # move the audio and csv files to the correct subdirectories
         self.move_files(sub_dirs, files)
 
-    def reformat_twc_files(self, twc_files):
+        # process the twc files if the user wants to
+        if self.twc:
+            self.reformat_twc_files()
+
+    def reformat_twc_files(self):
         # reformat the csv files
-        for f in twc_files:
+        for sub in os.listdir(self.dir):
+            path = os.path.join(self.dir,sub)
             new_data = []
             # open the file
-            with open(os.path.join(self.dir,f"twitch-chat-{f}.csv"), 'r', encoding='utf8') as file:
+            with open(os.path.join(path,f"twitch-chat-{sub}.csv"), 'r', encoding='utf8') as file:
                 reader = csv.reader(file, delimiter=',', dialect=csv.excel_tab)
                 # loop through each row
                 for i, row in enumerate(reader):
@@ -75,7 +77,7 @@ class FilePreProcessing():
                     new_data.append(row)
             # save the new data to a csv file
             df = pd.DataFrame(new_data, columns=['time', 'username', 'message'])
-            df.to_csv(os.path.join(self.dir,f"{f}.csv"), index=False)
+            df.to_csv(os.path.join(path,f"{sub}.csv"), index=False)
 
     def create_subdir_names(self, filename):
         for ending in self.audio_extensions:
