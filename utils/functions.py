@@ -12,7 +12,7 @@ def get_audio_files(directory, audio_file_endings):
         return None
     return audio_files[0] # return the first audio file
 
-def clean_matched_pairs(cleaner, file_path, time_seconds=3600):
+def clean_matched_speakers(cleaner, file_path, time_seconds=3600):
     with open(file_path, 'r') as f:
         data = json.load(f)
     
