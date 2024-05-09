@@ -5,15 +5,12 @@ import re
 import csv
 import pandas as pd
 import json
-from nltk.tokenize import sent_tokenize, word_tokenize
+from nltk.tokenize import sent_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer, TreebankWordTokenizer
 import emoji
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
 import en_core_web_lg
-import gensim
-from gensim.corpora import Dictionary
-from gensim.models import LdaModel
 from nltk.corpus import stopwords
 import string
 
