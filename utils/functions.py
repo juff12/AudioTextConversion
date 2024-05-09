@@ -68,10 +68,15 @@ def remove_punctuation(data):
         data[i] = text
     return data
 
-def prep_data(data, remove_punc=True, lower=True, max_len=2048):
+def prep_data(data, remove_punc, lower, max_len):
     # remove the punctuation
     if remove_punc:
         data = remove_punctuation(data)
+    else: # just fix common punctuation errors
+        for i, text in enumerate(data):
+            text = text.replace('.. ', '. ')
+            text = text.replace('...', '... ')
+            data[i] = text
     # convert to lower
     if lower:
         data = [item.lower() for item in data]
