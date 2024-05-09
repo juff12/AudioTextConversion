@@ -15,6 +15,7 @@ from pathlib import Path
 
 def args():
     parser = argparse.ArgumentParser()
+
     # arguments for gathering data
     parser.add_argument('--conda_env', type=str, default='youtube-env', help='name of the conda environment to use')
     parser.add_argument('--channel_url', type=str, default='', help='The url of the youtube channel to download the videos from')
@@ -61,6 +62,7 @@ def args():
     parser.add_argument('--run_matching', type=bool, default=False, help='run message matching')
     parser.add_argument('--run_clustering', type=bool, default=False, help='run topic clustering')
     parser.add_argument('--run_cleaning', type=bool, default=False, help='run cleaning of the matched files')
+    parser.add_argument('--reprocess', type=bool, default=False, help='reprocess old files')
     
     return parser.parse_args()
 
@@ -127,6 +129,12 @@ def run_asrdiarization(opt):
     sub_dirs = os.listdir(dir)
 
     for sub in tqdm(sub_dirs):
+        # skip already processed files
+        output_file_1 = os.path.join(dir, f"{sub}/diarization_{sub}.rttm")
+        output_file_2 = os.path.join(dir, f"{sub}/audio_text_{sub}.json")
+        if opt.reprocess is False and os.path.exists(output_file_1) and os.path.exists(output_file_2):
+            print(f"Skipping {sub}")
+            continue
         try:
             # audio directory
             audio_dir = os.path.join(dir, sub)
@@ -161,6 +169,16 @@ def run_topic_clustering(opt):
     clusterer = TopicClustering(nlp)
 
     for id in tqdm(files):
+        # skip already processed files
+        output_file_txt = os.path.join(dir, f"{id}/clusters_{id}.txt")
+        output_file_json = os.path.join(dir, f"{id}/clusters_{id}.json")
+        if opt.reprocess is False and opt.save_type == 'txt' and os.path.exists(output_file_txt):
+            print(f"Skipping {id}")
+            continue
+        elif opt.reprocess is False and opt.save_type == 'json' and os.path.exists(output_file_json):
+            print(f"Skipping {id}")
+            continue
+        # process the files
         try:
             # if the text cluster data is stored in a txt file, use this
             if opt.from_text:
@@ -204,6 +222,12 @@ def run_message_matching(opt):
     sub_dirs = os.listdir(dir)
 
     for sub in tqdm(sub_dirs):
+        # skip already processed files
+        output_file = os.path.join(dir, f"{sub}/pairs_{sub}_{opt.match_thresh}_formatted.json")
+        if opt.reprocess is False and os.path.exists(output_file):
+            print(f"Skipping {sub}")
+            continue
+                
         chat = pd.read_csv(os.path.join(dir,f"{sub}/{sub}.csv"))
         # convert the time column to numeric
         chat[['time']] = chat[['time']].apply(pd.to_numeric)       
@@ -252,10 +276,12 @@ def main():
 
     # get the data from youtube
     if opt.gather_data:
+        print('Gathering data')
         gather_data(opt.conda_env, opt.channel_url, opt.min_dur, opt.dir, opt.fragments)
 
     # initialize the file preprocessor
     if opt.run_preprocessing:
+        print('Running preprocessing')
         # it_yt is always FALSE because this script downloads the videos with the correct
         # file names and formats
         preprocessor = FilePreProcessing(opt.dir, is_yt=False, has_twc=opt.formatt_twc)
@@ -264,18 +290,22 @@ def main():
 
     # process the audio files
     if opt.run_audio_processing:
+        print('Running asr and diarization')
         run_asrdiarization(opt)
 
     # clean the files
     if opt.run_cleaning:
+        print('Running cleaning')
         run_cleaning(opt)
 
     # run the topic clustering
     if opt.run_clustering:
+        print('Running clustering')
         run_topic_clustering(opt)
 
     # match
     if opt.run_matching:
+        print('Running message matching')
         run_message_matching(opt)
 
 if __name__=="__main__":
