@@ -2,6 +2,8 @@ import json
 import os
 import argparse
 from pathlib import Path
+from utils.functions import remove_punctuation
+
 
 def args():
     parser = argparse.ArgumentParser()
@@ -25,6 +27,8 @@ def main():
             data = file.read()
         # split the data by new line
         data = data.split('\n')
+
+        data = remove_punctuation(data, type='txt')
         for item in data:
             # make sure its less than 2048 characters and not empty
             if len(item.strip()) >=2048 or item.strip() == '':

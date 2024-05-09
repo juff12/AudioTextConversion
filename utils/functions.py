@@ -1,5 +1,6 @@
 import os
 import json
+import re
 
 # returns the audio file from the directory
 def get_audio_files(directory, audio_file_endings):
@@ -44,3 +45,28 @@ def get_speakers_before_time(data, time_seconds=3600):
             speakers.add(speaker)
         i += 1
     return speakers
+
+def _remove_punc_helper(text):
+    # fix double '..'
+    text = text.replace('.. ', '. ')
+    # temporarily remove ellipsis
+    text = text.replace('...', '--')
+    # remove the other punctuation
+    text = text.replace(', ',' ').replace('. ', ' ').replace('! ', ' ').replace('? ', ' ')
+    # add back the ellipsis
+    text = text.replace('--', '... ')
+    # replace any multi spaces with single
+    text = re.sub(r'\s+', ' ',text)
+    return text
+
+def remove_punctuation(data, type='txt'):
+    # remove punctuation from the data for json
+    if type == 'json':
+        for item in data:
+            # remove the punctuation
+            item['text'] = _remove_punc_helper(item['text'])
+    elif type == 'txt': # remove punctuation from the data for txt
+        for i, item in enumerate(data):
+            # remove the punctuation
+            data[i] = _remove_punc_helper(item)
+    return data
