@@ -229,11 +229,19 @@ class TextCleaner():
         return re.sub(r'[\u0080-\uffff]', '', text)
 
     def fix_spacing(self, text: str):
-        # remove double spaces
-        text = text.replace('  ', ' ')
         # remove spaces before punctuation
         text = text.replace(' .', '.').replace(' ,', ',')
         text = text.replace(' ?', '?').replace(' !', '!')
+
+        # add spaces to ellipsis 
+        text = text.replace('...', ' ... ')
+
+        # remove double periods
+        text = text.replace('..', '. ')
+
+        # remove multiple spaces
+        text = re.sub(r'\s+', ' ', text)
+
         return text
 
     def restore_punctuation(self, text):
