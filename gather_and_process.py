@@ -129,7 +129,7 @@ def run_asrdiarization(opt):
     # get the sub directories
     sub_dirs = os.listdir(dir)
 
-    for sub in tqdm(sub_dirs):
+    for sub in tqdm(sub_dirs, total=len(sub_dirs), ncols=100, desc= 'Running ASR and Diarization'):
         # skip already processed files
         output_file_1 = os.path.join(dir, f"{sub}/diarization_{sub}.rttm")
         output_file_2 = os.path.join(dir, f"{sub}/audio_text_{sub}.json")
@@ -169,7 +169,7 @@ def run_topic_clustering(opt):
 
     clusterer = TopicClustering(nlp)
 
-    for id in tqdm(files):
+    for id in tqdm(files, total=len(files), ncols=100, desc= 'Clustering Text'):
         # skip already processed files
         output_file_txt = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.txt")
         output_file_json = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.json")
@@ -186,7 +186,7 @@ def run_topic_clustering(opt):
                 with open(os.path.join(dir,f"{id}/clean_text_{opt.time_cutoff}_{id}.txt")) as file:
                     audio_text = file.read()
             else: # else cluster from the json file
-                with open(os.path.join(dir,f"{id}/matched_{opt.time_cutoff}_{id}.json")) as file:
+                with open(os.path.join(dir,f"{id}/clean_matched_{id}.json")) as file:
                     audio_text = json.load(file)
                 audio_text = ' '.join([item['text'] for item in audio_text])
             
@@ -227,7 +227,7 @@ def run_message_matching(opt):
     # get the sub directories
     sub_dirs = os.listdir(dir)
 
-    for sub in tqdm(sub_dirs):
+    for sub in tqdm(sub_dirs, total=len(sub_dirs), ncols=100, desc= 'Matching Messages to Audio'):
         # skip already processed files
         output_file = os.path.join(dir, f"{sub}/pairs_{sub}_{opt.match_thresh}_formatted.json")
         if opt.reprocess is False and os.path.exists(output_file):
@@ -253,26 +253,26 @@ def run_cleaning(opt):
     # get the sub directories
     sub_dirs = [os.path.join(parent_dir, f) for f in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, f))]
     # get the unprocessed matched json files
-    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'matched' in f and 'clean' not in f]    
+    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and f'matched' in f and 'clean' not in f]    
 
     # create the text cleaner
     cleaner = TextCleaner()
 
     # clean the json files
-    for file in tqdm(files):
+    for file in tqdm(files, total=len(files), ncols=100, desc= 'Initial Cleaning'):
         clean_matched_speakers(cleaner, file, opt.time_seconds)
 
     # get the cleaned json files directory
-    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched_speaker' in f]
-    for f in tqdm(files):
+    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and f'clean_matched' in f]
+    for f in tqdm(files, total=len(files), ncols=100, desc= 'Final Cleaning'):
         with open(f, 'r') as file:
             data = json.load(file)
         # get the text that is less than the time cutoff
-        text = ' '.join([item['text'] for item in data if item['timestamp'] < opt.time_cutoff])
+        text = ' '.join([item['text'] for item in data if item['timestamp'][0] < opt.time_cutoff])
         # clean the text
         cleaned_text = cleaner.clean_text(text)
         # save the cleaned text as a txt file
-        with open(f.replace('clean_matched_speaker', f'clean_text_{opt.time_cutoff}_').replace('.json', '.txt'), 'w') as file:
+        with open(f.replace('clean_matched', f'clean_text_{opt.time_cutoff}').replace('.json', '.txt'), 'w') as file:
             file.write(cleaned_text)
 
 def main():
@@ -283,12 +283,10 @@ def main():
 
     # get the data from youtube
     if opt.gather_data:
-        print('Gathering data')
         gather_data(opt.conda_env, opt.channel_url, opt.min_dur, opt.dir, opt.fragments)
 
     # initialize the file preprocessor
     if opt.run_preprocessing:
-        print('Running preprocessing')
         # it_yt is always FALSE because this script downloads the videos with the correct
         # file names and formats
         preprocessor = FilePreProcessing(opt.dir, is_yt=False, has_twc=opt.formatt_twc)
@@ -297,22 +295,18 @@ def main():
 
     # process the audio files
     if opt.run_audio_processing:
-        print('Running asr and diarization')
         run_asrdiarization(opt)
 
     # clean the files
     if opt.run_cleaning:
-        print('Running cleaning')
         run_cleaning(opt)
 
     # run the topic clustering
     if opt.run_clustering:
-        print('Running clustering')
         run_topic_clustering(opt)
 
     # match
     if opt.run_matching:
-        print('Running message matching')
         run_message_matching(opt)
 
 if __name__=="__main__":
