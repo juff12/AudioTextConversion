@@ -2,9 +2,8 @@ import json
 import os
 import argparse
 from pathlib import Path
-from utils.functions import prep_data, remove_punctuation
-
-
+from utils.functions import prep_data
+\
 def args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='directory of files to be processed')
@@ -12,7 +11,8 @@ def args():
     parser.add_argument('--remove_punc', type=bool, default=False, help='remove punctuation from the text')
     parser.add_argument('--lower', type=bool, default=False, help='lowercase the text')
     parser.add_argument('--type_data', type=str, default='txt', help='the type of file the preprocessed data is in')
-    parser.add_argument('--max_len', type=int, default=2048, help='maximum length of the characters in a string')
+    parser.add_argument('--max_len', type=int, default=3000, help='maximum length of the characters in a string')
+    parser.add_argument('--time_cutoff', type=int, default=172800, help='time in seconds that was considered for clustering [default 2 days]')
     return parser.parse_args()
 
 def main():
@@ -26,7 +26,7 @@ def main():
 
     # get all the files in the directory
     subs = [os.path.join(opt.dir, sub) for sub in os.listdir(opt.dir)]
-    files = [os.path.join(sub, f) for sub in subs for f in os.listdir(sub) if 'clusters' in f and f.endswith(ext)]
+    files = [os.path.join(sub, f) for sub in subs for f in os.listdir(sub) if f'clusters_{opt.time_cutoff}' in f and f.endswith(ext)]
     
     final_data = []
     for f in files:

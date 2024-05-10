@@ -290,7 +290,11 @@ class TextCleaner():
         sentences = sent_tokenize(text)
         for i in range(len(sentences)):
             # get the punctuation
-            punc = sentences[i][-1]
+            punc = ''
+            if len(sentences[i]) == 0:
+                continue
+            elif sentences[i][-1] in self.punc:
+                punc = sentences[i][-1]
             # remove commas and ellipsis
             temp_sent = sentences[i].replace(',', '').replace('...', ' ')
             # remove the ngrams from the sentence

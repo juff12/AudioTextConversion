@@ -31,7 +31,7 @@ def clean_matched_speakers(cleaner, file_path, time_seconds=3600):
     # Consider adding partial cleaning here, currently the speed is slow so it isnt worth it
     ##########################
 
-    with open(file_path.replace('matched', 'clean_matched'), 'w') as f:
+    with open(file_path.replace('matched', 'clean_matched_speaker'), 'w') as f:
         json.dump(new_data, f, indent=4)
 
 # get the speakers befor a certain time

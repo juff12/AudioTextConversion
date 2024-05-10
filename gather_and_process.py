@@ -46,6 +46,7 @@ def args():
 
     # arguments for cleaning
     parser.add_argument('--time_seconds', type=int, default=3600, help='time in seconds to consider for getting the speakers')
+    parser.add_argument('--time_cutoff', type=int, default=172800, help='time in seconds to consider for clustering [default 2 days]')
 
     # arguments for topic clustering
     parser.add_argument('--cluster_thresh_1', type=float, default=0.35, help='threshold 1 for clustering')
@@ -53,8 +54,8 @@ def args():
     parser.add_argument('--from_text', type=bool, default=True, help='use txt file instead of json')
     parser.add_argument('--save_type', type=str, default='txt', help='type of file to save as [json/txt]')
     parser.add_argument('--min_cluster_len', type=int, default=60, help='minimum length of cluster')
-    parser.add_argument('--max_cluster_len', type=int, default=2048, help='maximum length of cluster')
-    
+    parser.add_argument('--max_cluster_len', type=int, default=3000, help='maximum length of cluster')
+
     # functions to run (all false by default)
     parser.add_argument('--gather_data', type=bool, default=False, help='gather data from the youtube channel')
     parser.add_argument('--run_preprocessing', type=bool, default=False, help='run preprocessing of the files (create subdirectories)')
@@ -170,8 +171,8 @@ def run_topic_clustering(opt):
 
     for id in tqdm(files):
         # skip already processed files
-        output_file_txt = os.path.join(dir, f"{id}/clusters_{id}.txt")
-        output_file_json = os.path.join(dir, f"{id}/clusters_{id}.json")
+        output_file_txt = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.txt")
+        output_file_json = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.json")
         if opt.reprocess is False and opt.save_type == 'txt' and os.path.exists(output_file_txt):
             print(f"Skipping {id}")
             continue
@@ -182,12 +183,15 @@ def run_topic_clustering(opt):
         try:
             # if the text cluster data is stored in a txt file, use this
             if opt.from_text:
-                with open(os.path.join(dir,f"{id}/clean_text_{id}.txt")) as file:
+                with open(os.path.join(dir,f"{id}/clean_text_{opt.time_cutoff}_{id}.txt")) as file:
                     audio_text = file.read()
             else: # else cluster from the json file
-                with open(os.path.join(dir,f"{id}/matched_{id}.json")) as file:
+                with open(os.path.join(dir,f"{id}/matched_{opt.time_cutoff}_{id}.json")) as file:
                     audio_text = json.load(file)
                 audio_text = ' '.join([item['text'] for item in audio_text])
+            
+            
+            
             # get the clusters
             cluster_topics, final_texts = clusterer.cluster(audio_text,
                                                             thresh_1=opt.cluster_thresh_1,
@@ -197,17 +201,19 @@ def run_topic_clustering(opt):
             
             # save the clusters based on type of save given
             if opt.save_type == 'txt':
-                clusterer.save_txt(final_texts, os.path.join(dir, f"{id}/clusters_{id}.txt"))
+                file_path = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.txt")
+                clusterer.save_txt(final_texts, file_path)
             elif opt.save_type == 'json':
                 # save to json
-                clusterer.save_json(cluster_topics, final_texts, os.path.join(dir, f"{id}/clusters_{id}.json"))
+                file_path = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.json")
+                clusterer.save_json(cluster_topics, final_texts, file_path)
         except Exception as e:
             print(e)
             continue
 
 def run_message_matching(opt):
     # set the device to use
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # select the model to use
     model = SentenceTransformer(opt.sent_model).to(device)
     # set the main directory to process
@@ -230,7 +236,7 @@ def run_message_matching(opt):
                 
         chat = pd.read_csv(os.path.join(dir,f"{sub}/{sub}.csv"))
         # convert the time column to numeric
-        chat[['time']] = chat[['time']].apply(pd.to_numeric)       
+        chat[['time']] = chat[['time']].apply(pd.to_numeric)
 
         # open the audio text file
         with open(os.path.join(dir,f"{sub}/audio_text_{sub}.json")) as file:
@@ -257,15 +263,16 @@ def run_cleaning(opt):
         clean_matched_speakers(cleaner, file, opt.time_seconds)
 
     # get the cleaned json files directory
-    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched' in f]
+    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched_speaker' in f]
     for f in tqdm(files):
         with open(f, 'r') as file:
             data = json.load(file)
-        text = ' '.join([item['text'] for item in data])
+        # get the text that is less than the time cutoff
+        text = ' '.join([item['text'] for item in data if item['timestamp'] < opt.time_cutoff])
         # clean the text
         cleaned_text = cleaner.clean_text(text)
         # save the cleaned text as a txt file
-        with open(f.replace('clean_matched', 'clean_text').replace('.json', '.txt'), 'w') as file:
+        with open(f.replace('clean_matched_speaker', f'clean_text_{opt.time_cutoff}_').replace('.json', '.txt'), 'w') as file:
             file.write(cleaned_text)
 
 def main():
