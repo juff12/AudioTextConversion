@@ -1,6 +1,7 @@
 import subprocess
 import argparse
-from utils import FilePreProcessing, ASRDiarization, TopicClustering, MessageMatcher, TextCleaner
+from utils.file_processor import FilePreProcessing, TopicClustering, MessageMatcher, TextCleaner, ResponseMatcher
+from utils.audio_processor import ASRDiarization
 from utils.functions import get_audio_files, clean_matched_speakers
 from pyannote.audio import Pipeline
 import en_core_web_lg
@@ -18,7 +19,7 @@ def args():
 
     # arguments for gathering data
     parser.add_argument('--conda_env', type=str, default='youtube-env', help='name of the conda environment to use')
-    parser.add_argument('--channel_url', type=str, default='', help='The url of the youtube channel to download the videos from')
+    parser.add_argument('--channel_url', type=str, default='', help='the url of the youtube channel to download the videos from')
     parser.add_argument('--min_dur', type=str, default=1800, help='the minimum length of video to download')
     parser.add_argument('--dir', type=str, default='data/streamers/test', help='the parent directory to save to')
     parser.add_argument('--fragments', type=int, default=1, help='number of concurrent fragments to download[set to 16 for twitch downloads]')
@@ -44,8 +45,14 @@ def args():
     parser.add_argument('--delay', type=int, default=10, help='delay in seconds for message matching')
     parser.add_argument('--multi_match', type=bool, default=False, help='allow multiple matches for a single message')
 
+    # arguments for the chat response matching
+    parser.add_argument('--message_delay', type=int, default=12, help='delay in seconds for chat response to streamer')
+    parser.add_argument('--speech_sim', type=float, default=0.7, help='similarity of speech messages for grouping')
+    parser.add_argument('--message_sim', type=float, default=0.25, help='similarity of chat messages to speech')
+
     # arguments for cleaning
     parser.add_argument('--time_seconds', type=int, default=3600, help='time in seconds to consider for getting the speakers')
+    # this is the time window that data will be saved from, anything after this time will be discarded
     parser.add_argument('--time_cutoff', type=int, default=172800, help='time in seconds to consider for clustering [default 2 days]')
 
     # arguments for topic clustering
@@ -63,6 +70,7 @@ def args():
     parser.add_argument('--run_matching', type=bool, default=False, help='run message matching')
     parser.add_argument('--run_clustering', type=bool, default=False, help='run topic clustering')
     parser.add_argument('--run_cleaning', type=bool, default=False, help='run cleaning of the matched files')
+    parser.add_argument('--run_response_matching', type=bool, default=False, help='run chat response matching')
     parser.add_argument('--reprocess', type=bool, default=False, help='reprocess old files')
     
     return parser.parse_args()
@@ -245,9 +253,45 @@ def run_message_matching(opt):
         # match the messages
         pairs = matcher.match(audio_text, chat)
         # save the pairs to a json file
-        file_path = os.path.join(dir, f"{sub}/pairs_{sub}_{opt.match_thresh}_formatted.json")
-        matcher.save_json(pairs, file_path)
+        matcher.save_json(pairs, output_file)
 
+def run_response_matching(opt):
+    # set the device to use
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # select the model to use
+    model = SentenceTransformer(opt.sent_model).to(device)
+    # set the main directory to process
+    dir = opt.dir
+    
+    # create the message matcher
+    matcher = ResponseMatcher(model, message_sim=opt.message_sim,
+                              speech_sim=opt.speech_sim, message_delay=opt.message_delay)
+
+    # get the sub directories
+    sub_dirs = os.listdir(dir)
+
+    for sub in tqdm(sub_dirs, total=len(sub_dirs), ncols=100, desc= 'Matching Chat Responses to Streamer'):
+        try:
+            # skip already processed files
+            output_file = os.path.join(dir, f"{sub}/chat_response_{sub}_{opt.message_sim}.json")
+            if opt.reprocess is False and os.path.exists(output_file):
+                print(f"Skipping {sub}")
+                continue
+                    
+            chat = pd.read_csv(os.path.join(dir,f"{sub}/{sub}.csv"))
+            # convert the time column to numeric
+            chat[['time']] = chat[['time']].apply(pd.to_numeric)
+            chat[['message']] = chat[['message']].astype(str)
+            # open the audio text file
+            with open(os.path.join(dir,f"{sub}/clean_matched_{sub}.json")) as file:
+                audio_text = json.load(file)
+            
+            # match the messages
+            pairs = matcher.match(audio_text, chat)
+            # save the pairs to a json file
+            matcher.save_json(pairs, output_file)
+        except:
+            print('Skipping File ', sub)
 def run_cleaning(opt):
     parent_dir = opt.dir
     # get the sub directories
@@ -263,7 +307,7 @@ def run_cleaning(opt):
         clean_matched_speakers(cleaner, file, opt.time_seconds)
 
     # get the cleaned json files directory
-    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and f'clean_matched' in f]
+    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched' in f]
     for f in tqdm(files, total=len(files), ncols=100, desc= 'Final Cleaning'):
         with open(f, 'r') as file:
             data = json.load(file)
@@ -308,6 +352,10 @@ def main():
     # match
     if opt.run_matching:
         run_message_matching(opt)
+
+    # match the chat responses
+    if opt.run_response_matching:
+        run_response_matching(opt)
 
 if __name__=="__main__":
     main()

@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer, util
 import en_core_web_lg
 from nltk.corpus import stopwords
 import string
-
+from tqdm import tqdm
 
 class FilePreProcessing():
     def __init__(self, directory, is_yt=False, has_twc=False):
@@ -570,6 +570,100 @@ class MessageMatcher():
         pairs = self.match_chat_response(audio_text, chat)
         pairs = self.format_conversation(pairs)
         pairs = self.clean_pairs(pairs)
+        return pairs
+    
+    def save_json(self, pairs, filename):
+        try:
+            # save the data
+            with open(filename, 'w') as file:
+                json.dump(pairs, file, indent=4)
+        except Exception as e: # file couldnt be opened or no data to save
+            print('Error saving json file')
+            print("Error: ", e)
+
+class ResponseMatcher():
+    def __init__(self, model, message_sim=0.6, speech_sim=0.6, message_delay=10):
+        self.model = model
+        self.message_sim = message_sim
+        self.cleaner = TextCleaner()
+        self.speech_sim = speech_sim
+        self.delay = message_delay
+
+    def _refine_chat(self, chat):
+        chat = chat[~chat['message'].str.contains('@')]
+        return chat
+    
+    def score_messages(self, messages, speech):
+        message_embeddings = self.model.encode(messages, convert_to_tensor=True)
+        speech_embedding = self.model.encode(speech, convert_to_tensor=True)
+        scores = util.dot_score(message_embeddings, speech_embedding)
+        return scores.cpu().numpy().flatten()
+
+    def score_speech(self, audio_group, new_speech):
+        group_embeddings = self.model.encode(audio_group, convert_to_tensor=True)
+        new_speech_embedding = self.model.encode(new_speech, convert_to_tensor=True)
+        scores = util.dot_score(new_speech_embedding, group_embeddings)
+        scores = scores.cpu().numpy()
+        if np.mean(scores) < self.speech_sim:
+            return False # the speech is not related to the conversation
+        return True # the speech is related to the converstation
+    
+    def _group_audio(self, audio_text):
+        # group audio chunks by similiarity
+        new_audio = []
+        i = 0
+        # main group on audio text
+        while i < len(audio_text):
+            # starting time of the audio group
+            start_time = audio_text[i]['timestamp'][0]
+            audio_group = [audio_text[i]['text']]
+            i += 1
+            # combine the similar chunks
+            while i < len(audio_text) and self.score_speech(audio_group, audio_text[i]['text']):
+                # message is related to the group, add it
+                audio_group.append(audio_text[i]['text'])
+                i += 1
+            # ending time of the audio group
+            end_time = audio_text[i-1]['timestamp'][1]
+            # check that the end time is not null
+            if end_time is None:
+                # this can occur at the end of the audio, grab start of last chunk
+                end_time = audio_text[i-1]['timestamp'][0]
+            # add the audio group to the new audio
+            new_audio.append({'text': ' '.join(audio_group), 'timestamp': [start_time, end_time]})
+        return new_audio
+
+    def match_chat_response(self, audio_text, chat):
+        pairs = []
+        # iterate through each audio chunk and match to chat messages
+        for item in tqdm(audio_text, total=len(audio_text), desc='Pairing', ncols=100):
+            interval = item['timestamp']
+            if interval[1] is None:
+                interval[1] = interval[0] + self.delay
+            speech = item['text']
+            # iterate through the chat message in the time interval
+            interval_chat = chat['message'][(chat['time'] >= interval[0] + self.delay) & (chat['time'] <= interval[1] + self.delay)].values
+            # skip empty speech and intervals with no messages
+            if speech == '' or len(interval_chat) == 0:
+                continue
+            
+            # score the messages
+            scores = self.score_messages(interval_chat, speech)
+    
+            assert len(scores) == len(interval_chat) # confirm the scores are the same length as the chat messages
+            for i, score in enumerate(scores):
+                # make sure the message is related, but is not the streamer reading the message
+                if score >= self.message_sim and score <= 0.75:
+                    pairs.append({'message': interval_chat[i], 'response': speech})            
+        return pairs
+
+    def match(self, audio_text, chat):
+        # remove the messages not directed at the streamer
+        chat = self._refine_chat(chat)
+        # group the audio chunks
+        #audio_text = self._group_audio(audio_text)
+        # chat response to audio chunks
+        pairs = self.match_chat_response(audio_text, chat)
         return pairs
     
     def save_json(self, pairs, filename):
