@@ -1,12 +1,11 @@
 import os
 import json
 import re
-from deepmultilingualpunctuation import PunctuationModel
 from nltk.tokenize import sent_tokenize
 from transformers import logging
 from tqdm import tqdm
-from sentence_transformers import SentenceTransformer, util
-import numpy as np
+from sentence_transformers import util
+
 logging.set_verbosity(logging.ERROR)
 
 # returns the audio file from the directory
@@ -20,7 +19,7 @@ def get_audio_files(directory, audio_file_endings):
         return None
     return audio_files[0] # return the first audio file
 
-def clean_matched_speakers(cleaner, file_path, time_seconds=3600):
+def clean_matched_speakers(cleaner, streamer, file_path, time_seconds=3600):
     with open(file_path, 'r') as f:
         data = json.load(f)
     
@@ -34,13 +33,13 @@ def clean_matched_speakers(cleaner, file_path, time_seconds=3600):
     # store all the data with the speakers in the segment of time in a new list
     new_data = [item for item in data if any([True if speaker in speakers else False for speaker in item['speaker_id']])]
     
-    ##########################
-    # Consider adding partial cleaning here, currently the speed is slow so it isnt worth it
-    ##########################
-    # for i, item in enumerate(new_data):
-    #     # clean the text
-    #     new_data[i]['text'] = cleaner.clean_text(item['text'])
 
+    # basic cleaning of text
+    if streamer:
+        for i, item in enumerate(new_data):
+            if item['text'] != '':
+                new_data[i]['text'] = remove_specific_sequences(item['text']) # remove specific sequences
+                new_data[i]['text'] = cleaner.clean_text(item['text']) # clean the text
 
     with open(file_path.replace('matched', f'clean_matched'), 'w') as f:
         json.dump(new_data, f, indent=4)
@@ -79,33 +78,33 @@ def remove_punctuation(data):
         data[i] = text
     return data
 
-def prep_data(data, is_streamer, remove_punc, restore_punc, lower, max_len):
-    model = PunctuationModel()
-    # remove the punctuation
-    if remove_punc:
-        data = remove_punctuation(data)
-    else: # just fix common punctuation errors
-        for i, text in tqdm(enumerate(data), total=len(data), ncols=100, desc= 'Restoring Punctuation'):
-            text = text.replace('.. ', '. ')
-            text = text.replace('...', '... ')
-            ######################################
-            # Change this to run on dataset for better efficiency
-            ######################################
-            if restore_punc and text != '':
-                try:
-                    text = model.restore_punctuation(text)
-                except Exception as e:
-                    print(f"Error: {e}")
-                    print(f"Text: {text}")
-            data[i] = text
-    if is_streamer:
-        data = [remove_specific_sequences(item) for item in data if item != '']
-    # convert to lower
-    if lower:
-        data = [item.lower() for item in data]
-    # format the data for the model, remove empty sequences, and sequences that are too long
-    data = [{'text': "<s> " + item.strip() + " </s>"} for item in data if len(item.strip()) <= max_len and item.strip() != '']
-    return data
+# def prep_data(data, is_streamer, remove_punc, restore_punc, lower, max_len):
+#     model = PunctuationModel()
+#     # remove the punctuation
+#     if remove_punc:
+#         data = remove_punctuation(data)
+#     else: # just fix common punctuation errors
+#         for i, text in tqdm(enumerate(data), total=len(data), ncols=100, desc= 'Restoring Punctuation'):
+#             text = text.replace('.. ', '. ')
+#             text = text.replace('...', '... ')
+#             ######################################
+#             # Change this to run on dataset for better efficiency
+#             ######################################
+#             if restore_punc and text != '':
+#                 try:
+#                     text = model.restore_punctuation(text)
+#                 except Exception as e:
+#                     print(f"Error: {e}")
+#                     print(f"Text: {text}")
+#             data[i] = text
+#     if is_streamer:
+#         data = [remove_specific_sequences(item) for item in data if item != '']
+#     # convert to lower
+#     if lower:
+#         data = [item.lower() for item in data]
+#     # format the data for the model, remove empty sequences, and sequences that are too long
+#     data = [{'text': "<s> " + item.strip() + " </s>"} for item in data if len(item.strip()) <= max_len and item.strip() != '']
+#     return data
 
 def remove_specific_sequences(text):
     sents = sent_tokenize(text)
@@ -130,7 +129,7 @@ def update_history(chat, current_time, history_limit=40):
 def score_messages(model, messages, speech):
     message_embeddings = model.encode(messages, convert_to_tensor=True)
     speech_embedding = model.encode(speech, convert_to_tensor=True)
-    scores = util.dot_score(message_embeddings, speech_embedding)
+    scores = util.cos_sim(message_embeddings, speech_embedding)
     return scores.cpu().numpy()#.flatten()
 
 def find_chat_message_splits(model, chat, audio_text, delay=15):
@@ -171,7 +170,7 @@ def find_chat_message_splits(model, chat, audio_text, delay=15):
         has_added = False
         for i in range(scores.shape[0]):
             for j in range(scores.shape[1]):
-                if scores[i,j] >= 0.5:
+                if scores[i,j] >= 0.55:
                     segment = ' '.join(sents[j:])
                     if has_added is False:
                         pairs.append({'message': '', 'response': ' '.join(sents[:j])})
@@ -181,46 +180,4 @@ def find_chat_message_splits(model, chat, audio_text, delay=15):
         # if no match was found, add the entire speech as an unpaired message
         if has_added is False:
             pairs.append({'message': '', 'response': speech})
-
-    # # iterate through each audio chunk and match to chat messages
-    # for item in tqdm(audio_text, total=len(audio_text), desc='Pairing', ncols=100):
-    #     try:
-    #         interval = item['timestamp']
-    #         if interval[1] is None:
-    #             interval[1] = interval[0] + delay
-    #         interval[0] = interval[0] - delay
-    #         if interval[0] < 0:
-    #             interval[0] = 0
-    #         history = update_history(chat, interval[0])
-    #         # iterate through the chat message in the time interval
-    #         interval_chat = chat['message'][(chat['time'] >= interval[0]) & (chat['time'] <= interval[1])].values.tolist()
-    #         # merge prior messages with messages over the interval
-    #         interval_chat = history + interval_chat
-    #         # remove messages that are less than 2 words
-    #         interval_chat = [item for item in interval_chat if len(item.split(' ')) > 2]
-    #         # remove duplicates
-    #         interval_chat = list(set(interval_chat))
-
-    #         # get the streamers current speech
-    #         speech = item['text']
-            
-    #         # if a message is inside the speech text with similarity above 0.8, split the at the start of the match
-    #         sents = sent_tokenize(speech)
-    #         j = 0
-    #         has_added = False
-    #         for i, sent in enumerate(sents):
-    #             scores = score_messages(model, interval_chat, sent)
-    #             for k, score in enumerate(scores):
-    #                 if score >= 0.8:
-    #                     segment = ' '.join(sents[i:])
-    #                     if has_added is False:
-    #                         pairs.append({'message': '', 'response': ' '.join(sents[:i])})
-    #                     pairs.append({'message': interval_chat[k], 'response': segment})
-    #                     has_added = True
-    #     except Exception as e:
-    #         print(f"Error: {e}")
-    #         print(f"Item: {item}")
-    #     # if no match was found, add the entire speech as an unpaired message
-    #     if has_added is False:
-    #         pairs.append({'message': '', 'response': speech})
     return pairs
