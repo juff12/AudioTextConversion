@@ -321,7 +321,7 @@ class TextCleaner():
         text = self.remove_repeat(text)
         # fix spacing
         text = self.fix_spacing(text)
-        return text
+        return text.strip()
 
     def clean_json(self, json_file):
         # open the json file
@@ -476,7 +476,7 @@ class MessageMatcher():
         # chat messages
         message_history = [message for message in history]
         passage_embeddings = self.model.encode(message_history)
-        scores = util.dot_score(query_embedding, passage_embeddings)
+        scores = util.cos_sim(query_embedding, passage_embeddings)
 
         return scores.numpy()
     
@@ -491,7 +491,7 @@ class MessageMatcher():
         query_embedding = self.model.encode(message)
         response = response
         passage_embeddings = self.model.encode(response)
-        scores = util.dot_score(query_embedding, passage_embeddings)
+        scores = util.cos_sim(query_embedding, passage_embeddings)
         return scores.numpy()[0]
     
     # if the next chat message in the log relates to the current response, end the conversation
@@ -596,13 +596,13 @@ class ResponseMatcher():
     def score_messages(self, messages, speech):
         message_embeddings = self.model.encode(messages, convert_to_tensor=True)
         speech_embedding = self.model.encode(speech, convert_to_tensor=True)
-        scores = util.dot_score(message_embeddings, speech_embedding)
+        scores = util.cos_sim(message_embeddings, speech_embedding)
         return scores.cpu().numpy().flatten()
 
     def score_speech(self, audio_group, new_speech):
         group_embeddings = self.model.encode(audio_group, convert_to_tensor=True)
         new_speech_embedding = self.model.encode(new_speech, convert_to_tensor=True)
-        scores = util.dot_score(new_speech_embedding, group_embeddings)
+        scores = util.cos_sim(new_speech_embedding, group_embeddings)
         scores = scores.cpu().numpy()
         if np.mean(scores) < self.speech_sim:
             return False # the speech is not related to the conversation
@@ -654,7 +654,7 @@ class ResponseMatcher():
             for i, score in enumerate(scores):
                 # make sure the message is related, but is not the streamer reading the message
                 if score >= self.message_sim and score <= 0.75:
-                    pairs.append({'message': interval_chat[i], 'response': speech})            
+                    pairs.append({ 'message': speech, 'response': self.cleaner.remove_unicode(str(interval_chat[i]))})            
         return pairs
 
     def match(self, audio_text, chat):

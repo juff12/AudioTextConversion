@@ -13,7 +13,8 @@ import json
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
-
+from deepmultilingualpunctuation import PunctuationModel
+import re
 def args():
     parser = argparse.ArgumentParser()
 
@@ -46,7 +47,7 @@ def args():
     parser.add_argument('--multi_match', type=bool, default=False, help='allow multiple matches for a single message')
 
     # arguments for the chat response matching
-    parser.add_argument('--message_delay', type=int, default=12, help='delay in seconds for chat response to streamer')
+    parser.add_argument('--message_delay', type=int, default=15, help='delay in seconds for chat response to streamer')
     parser.add_argument('--speech_sim', type=float, default=0.7, help='similarity of speech messages for grouping')
     parser.add_argument('--message_sim', type=float, default=0.25, help='similarity of chat messages to speech')
 
@@ -54,7 +55,9 @@ def args():
     parser.add_argument('--time_seconds', type=int, default=3600, help='time in seconds to consider for getting the speakers')
     # this is the time window that data will be saved from, anything after this time will be discarded
     parser.add_argument('--time_cutoff', type=int, default=172800, help='time in seconds to consider for clustering [default 2 days]')
-
+    parser.add_argument('--streamer', type=bool, default=False, help='if the data is from a streamer')
+    parser.add_argument('--double_clean', type=bool, default=False, help='clean the text twice')
+    
     # arguments for topic clustering
     parser.add_argument('--cluster_thresh_1', type=float, default=0.35, help='threshold 1 for clustering')
     parser.add_argument('--cluster_thresh_2', type=float, default=0.6, help='threshold 2 for clustering')
@@ -62,6 +65,7 @@ def args():
     parser.add_argument('--save_type', type=str, default='txt', help='type of file to save as [json/txt]')
     parser.add_argument('--min_cluster_len', type=int, default=60, help='minimum length of cluster')
     parser.add_argument('--max_cluster_len', type=int, default=3000, help='maximum length of cluster')
+    parser.add_argument('--restore_punc', type=bool, default=True, help='restore punctuation in the clusters')
 
     # functions to run (all false by default)
     parser.add_argument('--gather_data', type=bool, default=False, help='gather data from the youtube channel')
@@ -177,6 +181,8 @@ def run_topic_clustering(opt):
 
     clusterer = TopicClustering(nlp)
 
+    punc_model = PunctuationModel()
+
     for id in tqdm(files, total=len(files), ncols=100, desc= 'Clustering Text'):
         # skip already processed files
         output_file_txt = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.txt")
@@ -207,6 +213,10 @@ def run_topic_clustering(opt):
                                                             min_len=opt.min_cluster_len,
                                                             max_len=opt.max_cluster_len)
             
+            # restore the punctuation in the clusters
+            if opt.restore_punc:
+                final_texts = [punc_model.restore_punctuation(cluster) for cluster in final_texts]
+
             # save the clusters based on type of save given
             if opt.save_type == 'txt':
                 file_path = os.path.join(dir, f"{id}/clusters_{opt.time_cutoff}_{id}.txt")
@@ -292,6 +302,7 @@ def run_response_matching(opt):
             matcher.save_json(pairs, output_file)
         except:
             print('Skipping File ', sub)
+
 def run_cleaning(opt):
     parent_dir = opt.dir
     # get the sub directories
@@ -303,21 +314,23 @@ def run_cleaning(opt):
     cleaner = TextCleaner()
 
     # clean the json files
-    for file in tqdm(files, total=len(files), ncols=100, desc= 'Initial Cleaning'):
-        clean_matched_speakers(cleaner, file, opt.time_seconds)
+    for file in tqdm(files, total=len(files), ncols=100, desc= 'Cleaning'):
+        clean_matched_speakers(cleaner, opt.streamer, file, opt.time_seconds)
 
     # get the cleaned json files directory
     files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched' in f]
-    for f in tqdm(files, total=len(files), ncols=100, desc= 'Final Cleaning'):
+    for f in tqdm(files, total=len(files), ncols=100, desc= 'Text Assembly'):
         with open(f, 'r') as file:
             data = json.load(file)
         # get the text that is less than the time cutoff
         text = ' '.join([item['text'] for item in data if item['timestamp'][0] < opt.time_cutoff])
-        # clean the text
-        cleaned_text = cleaner.clean_text(text)
+        text = re.sub(r'\s+', ' ', text) # remove multiple spaces
+        if opt.double_clean:
+            text = cleaner.clean_text(text)
+        
         # save the cleaned text as a txt file
         with open(f.replace('clean_matched', f'clean_text_{opt.time_cutoff}').replace('.json', '.txt'), 'w') as file:
-            file.write(cleaned_text)
+            file.write(text)
 
 def main():
     opt = args()
