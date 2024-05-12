@@ -35,7 +35,8 @@ def args():
     parser.add_argument('--load_files', type=bool, default=False, help='load the files instead of processing the audio')
     parser.add_argument('--save_asr', type=bool, default=True, help='save the asr files as separate json files')
     parser.add_argument('--save_diarization', type=bool, default=True, help='save the diarization files as separate rttm files')
-    
+    parser.add_argument('--merge_speakers', type=bool, default=False, help='merge the speakers in the data')
+
     # arguments for matching the text
     parser.add_argument('--sent_model', type=str, default='multi-qa-MiniLM-L6-cos-v1', help='name of the sentence transformer semantic model')
     parser.add_argument('--sim_cutoff', type=float, default=0.7, help='similarity cutoff for message matching')
@@ -148,27 +149,37 @@ def run_asrdiarization(opt):
         if opt.reprocess is False and os.path.exists(output_file_1) and os.path.exists(output_file_2):
             print(f"Skipping {sub}")
             continue
-        try:
-            # audio directory
-            audio_dir = os.path.join(dir, sub)
-            audio_file = get_audio_files(audio_dir, endings)
-            
-            if opt.load_files:
-                audio_file = os.path.join(audio_dir, f'audio_text_{sub}.json')
-                diarization_file = os.path.join(audio_dir, f'diarization_{sub}.rttm')
-                # from files matching the diarization and asr
-                matched_text = matcher.process_from_files(audio_file, diarization_file)
-            else:
-                # match the diarization and asr
-                matched_text = matcher.process_audio(audio_file, save_dir=audio_dir,
-                                                    save_id=sub, save_asr=opt.save_asr,
-                                                    save_diarization=opt.save_diarization)
-            # save the pairs to a json file
-            file_path = os.path.join(audio_dir, f"matched_{sub}.json")
-            matcher.save_json(matched_text, file_path)
-        except Exception as e:
-            print(e)
-            continue
+        
+        # audio directory
+        audio_dir = os.path.join(dir, sub)
+        audio_file = get_audio_files(audio_dir, endings)
+        
+        if opt.load_files:
+            audio_file = os.path.join(audio_dir, f'audio_text_{sub}.json')
+            diarization_file = os.path.join(audio_dir, f'diarization_{sub}.rttm')
+            # from files matching the diarization and asr
+            matched_text = matcher.process_from_files(audio_file, diarization_file)
+        else:
+            # match the diarization and asr
+            matched_text = matcher.process_audio(audio_file, save_dir=audio_dir,
+                                                save_id=sub, save_asr=opt.save_asr,
+                                                save_diarization=opt.save_diarization)
+        
+        ###########################
+        # was causing issue
+        ###########################
+        if opt.merge_speakers:
+            matched_text = matcher.merge_speakers(matched_text)
+
+        # save the pairs to a json file
+        file_path = os.path.join(audio_dir, f"matched_{sub}.json")
+        
+        # save to json
+        with open(file_path, 'w') as file:
+            json.dump(matched_text, file, indent=4)
+
+
+
 
 def run_topic_clustering(opt):
     # set the main directory to process
@@ -283,7 +294,7 @@ def run_response_matching(opt):
     for sub in tqdm(sub_dirs, total=len(sub_dirs), ncols=100, desc= 'Matching Chat Responses to Streamer'):
         try:
             # skip already processed files
-            output_file = os.path.join(dir, f"{sub}/chat_response_{sub}_{opt.message_sim}.json")
+            output_file = os.path.join(dir, f"{sub}/chat_response_{opt.message_sim}_{sub}.json")
             if opt.reprocess is False and os.path.exists(output_file):
                 print(f"Skipping {sub}")
                 continue
@@ -316,21 +327,22 @@ def run_cleaning(opt):
     # clean the json files
     for file in tqdm(files, total=len(files), ncols=100, desc= 'Cleaning'):
         clean_matched_speakers(cleaner, opt.streamer, file, opt.time_seconds)
-
-    # get the cleaned json files directory
-    files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched' in f]
-    for f in tqdm(files, total=len(files), ncols=100, desc= 'Text Assembly'):
-        with open(f, 'r') as file:
-            data = json.load(file)
-        # get the text that is less than the time cutoff
-        text = ' '.join([item['text'] for item in data if item['timestamp'][0] < opt.time_cutoff])
-        text = re.sub(r'\s+', ' ', text) # remove multiple spaces
-        if opt.double_clean:
+    # double clean the text
+    if opt.double_clean:
+        # get the cleaned json files directory
+        files = [os.path.join(sub_dir, f) for sub_dir in sub_dirs for f in os.listdir(sub_dir) if f.endswith('.json') and 'clean_matched' in f]
+        for f in tqdm(files, total=len(files), ncols=100, desc= 'Text Assembly'):
+            with open(f, 'r') as file:
+                data = json.load(file)
+            # get the text that is less than the time cutoff
+            text = ' '.join([item['text'] for item in data if item['timestamp'][0] < opt.time_cutoff])
+            text = re.sub(r'\s+', ' ', text) # remove multiple spaces
+            
             text = cleaner.clean_text(text)
-        
-        # save the cleaned text as a txt file
-        with open(f.replace('clean_matched', f'clean_text_{opt.time_cutoff}').replace('.json', '.txt'), 'w') as file:
-            file.write(text)
+            
+            # save the cleaned text as a txt file
+            with open(f.replace('clean_matched', f'clean_text_{opt.time_cutoff}').replace('.json', '.txt'), 'w') as file:
+                file.write(text)
 
 def main():
     opt = args()
