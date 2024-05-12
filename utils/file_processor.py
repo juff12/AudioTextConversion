@@ -654,7 +654,8 @@ class ResponseMatcher():
             for i, score in enumerate(scores):
                 # make sure the message is related, but is not the streamer reading the message
                 if score >= self.message_sim and score <= 0.75:
-                    pairs.append({ 'message': speech, 'response': self.cleaner.remove_unicode(str(interval_chat[i]))})            
+                    response = self.cleaner.clean_text(str(interval_chat[i]))
+                    pairs.append({ 'message': speech, 'response': response, 'score': str(score)})            
         return pairs
 
     def match(self, audio_text, chat):
