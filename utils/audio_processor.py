@@ -3,6 +3,7 @@ import json
 from utils.file_processor import TextCleaner
 from pyannote.audio.pipelines.utils.hook import ProgressHook
 import torchaudio
+from tqdm import tqdm
 
 class ASRDiarization():
     def __init__(self, asr_pipeline, diarization_pipeline):
@@ -31,7 +32,7 @@ class ASRDiarization():
         diarization = self.rttm_array(diarization)
         diarization = self.read_rttm(diarization)
         # match the processed audio and the diarization
-        matched_text = self.match_speakers(asr['chunks'], diarization, merge=True)
+        matched_text = self.match_speakers(asr['chunks'], diarization)
         return matched_text
     
     def process_from_files(self, audio_file, diarization_file):
@@ -43,8 +44,8 @@ class ASRDiarization():
             diarization = self.read_rttm(diarization)
         
         # match the processed audio and the diarization
-        matched_text = self.match_speakers(audio_text['chunks'], diarization, merge=True)
-        
+        matched_text = self.match_speakers(audio_text['chunks'], diarization)
+
         # return the matched data
         return matched_text
 
@@ -76,23 +77,32 @@ class ASRDiarization():
             diarization[speaker_id].append((start_time, end_time))
         return diarization
 
-    def match_speakers(self, audio_text, speaker_times, merge=True):
-        for speaker_id, times in speaker_times.items():
+    def match_speakers(self, audio_text, speaker_times):
+        # match the diarization and the audio text
+        # go through all the speak times
+        for speaker_id, times in tqdm(speaker_times.items(), total=len(speaker_times), 
+                                      ncols=100, desc= 'Matching Speakers'):
+            # go though each audio item
             for i in range(len(audio_text)):
+                # check each time in the audio text
                 for start_time, end_time in times:
                     if self.overlapp(start_time, end_time, audio_text[i]['timestamp']):
+                        # create a speaker id key in the dictionary
                         if 'speaker_id' not in audio_text[i]:
                             audio_text[i]['speaker_id'] = [speaker_id]
                             break
+                        # add the speaker id to the list
                         elif speaker_id not in audio_text[i]['speaker_id']:
                             audio_text[i]['speaker_id'].append(speaker_id)
                             break
-        # merge the speakers
-        if merge:
-            audio_text = self.merge_speakers(audio_text)
-        # clean the text before returning
-        for i in range(len(audio_text)):
-            audio_text[i]['text'] = self.cleaner.clean_text(audio_text[i]['text'])
+        # fix missing speaker ids
+        i = 0
+        while i < len(audio_text):
+            if i == 0 and 'speaker_id' not in audio_text[i]:
+                audio_text[i]['speaker_id'] = ['unknown']
+            elif 'speaker_id' not in audio_text[i]:
+                audio_text[i]['speaker_id'] = audio_text[i-1]['speaker_id']
+            i += 1
         return audio_text
 
     def overlapp(self, start_time, end_time, timestamp):
@@ -144,12 +154,3 @@ class ASRDiarization():
                 last_speakers = matched_text[i]['speaker_id']
                 new_text.append(matched_text[i])
         return new_text
-    
-    def save_json(self, matched, filename):
-        try:
-            # save the data
-            with open(filename, 'w') as file:
-                json.dump(matched, file, indent=4)
-        except Exception as e: # file couldnt be opened or no data to save
-            print('Error saving json file')
-            print("Error: ", e)
