@@ -40,11 +40,12 @@ def main():
 
     for sub in tqdm(sub_dirs):
         chat = pd.read_csv(os.path.join(dir,f"{sub}/{sub}.csv"))
-        # convert the time column to numeric
-        chat[['time']] = chat[['time']].apply(pd.to_numeric)       
+        # convert the time column to numericch
+        chat[['time']] = chat[['time']].apply(pd.to_numeric)
+        chat[['message']] = chat[['message']].astype(str)
 
         # open the audio text file
-        with open(os.path.join(dir,f"{sub}/audio_text_{sub}.json")) as file:
+        with open(os.path.join(dir,f"{sub}/clean_matched_{sub}.json")) as file:
             audio_text = json.load(file)
         
         # match the messages
