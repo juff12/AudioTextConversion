@@ -50,11 +50,7 @@ coverage.xml
 docs/_build/
 
 # temp files
-test.py
-test2.py
-test3.py
-test4.py
-test.ipynb
+testing/
 
 # data, keys, and notebooks
 data/
